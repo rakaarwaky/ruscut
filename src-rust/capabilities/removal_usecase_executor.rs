@@ -21,7 +21,7 @@ impl RemovalUseCaseProtocol for RemovalUseCase {
         // 1. Determine the ONNX model path
         let model_path = if let Some(ref custom_path) = options.custom_model_path {
             if !custom_path.exists() {
-                anyhow::bail!("File model custom tidak ditemukan di path: {:?}", custom_path);
+                anyhow::bail!("Custom model file not found at path: {:?}", custom_path);
             }
             custom_path.clone()
         } else {

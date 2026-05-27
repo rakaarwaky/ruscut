@@ -32,7 +32,7 @@ impl ModelDownloaderPort for HuggingfaceModelAdapter {
             download_model_impl(model_type.url(), &target_path, model_type.label())?;
         } else {
             println!(
-                "{} Menggunakan model dari cache: {:?}",
+                "{} Using model from cache: {:?}",
                 "INFO:".blue().bold(),
                 target_path
             );
@@ -47,17 +47,17 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
     use std::io::{Read, Write};
 
     println!(
-        "{} Model {} tidak ditemukan di cache.",
+        "{} Model {} not found in cache.",
         "INFO:".blue().bold(),
         model_label.cyan()
     );
-    println!("{} Mengunduh model dari Hugging Face...", "INFO:".blue().bold());
+    println!("{} Downloading model from Hugging Face...", "INFO:".blue().bold());
 
     let mut response = reqwest::blocking::get(url)
-        .context("Gagal melakukan HTTP request untuk mengunduh model")?;
+        .context("Failed to execute HTTP request to download model")?;
         
     if !response.status().is_success() {
-        anyhow::bail!("Gagal mengunduh model: status HTTP {}", response.status());
+        anyhow::bail!("Failed to download model: HTTP status {}", response.status());
     }
 
     let total_size = response
@@ -71,29 +71,29 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .context("Format progress bar tidak valid")?
+            .context("Invalid progress bar template format")?
             .progress_chars("#>-"),
     );
 
     if let Some(parent) = dest_path.parent() {
-        std::fs::create_dir_all(parent).context("Gagal membuat direktori cache")?;
+        std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
     }
 
-    let mut file = std::fs::File::create(dest_path).context("Gagal membuat file model di cache")?;
+    let mut file = std::fs::File::create(dest_path).context("Failed to create model file in cache")?;
     let mut buffer = [0; 16384]; // 16KB buffer
     loop {
         let bytes_read = response
             .read(&mut buffer)
-            .context("Gagal membaca chunk data unduhan")?;
+            .context("Failed to read download chunk data")?;
         if bytes_read == 0 {
             break;
         }
         file.write_all(&buffer[..bytes_read])
-            .context("Gagal menulis data model ke disk")?;
+            .context("Failed to write model data to disk")?;
         pb.inc(bytes_read as u64);
     }
 
-    pb.finish_with_message("Unduhan selesai!");
-    println!("{} Model disimpan ke: {:?}", "SUKSES:".green().bold(), dest_path);
+    pb.finish_with_message("Download complete!");
+    println!("{} Model saved to: {:?}", "SUCCESS:".green().bold(), dest_path);
     Ok(())
 }

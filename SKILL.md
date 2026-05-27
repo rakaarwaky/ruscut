@@ -29,11 +29,9 @@ ruscut [OPTIONS] <INPUT> [OUTPUT]
 | Flag | Parameter | Type | Description |
 |---|---|---|---|
 | `-m`, `--model` | `<MODEL_PATH>` | Path | Path to a custom local `.onnx` model file (bypasses Hugging Face download). |
-| `--fp16` | None | Flag | Configures use of the FP16 precision model (88.2 MB). |
-| `--full` | None | Flag | Configures use of the full precision model (176 MB). |
 | `-f`, `--force-download` | None | Flag | Re-downloads the model asset even if it is present in the cache. |
 
-*Note: If neither `--fp16` nor `--full` is specified, the CLI defaults to the lightweight **Quantized** version (44.4 MB).*
+*Note: The CLI automatically downloads and runs the high-precision **Full** version (176 MB) by default.*
 
 ---
 
@@ -51,13 +49,10 @@ import json
 def remove_background(
     input_path: str,
     output_path: str = None,
-    precision: str = "quantized",
     force_download: bool = False
 ) -> dict:
     """
     Programmatic helper for AI agents to execute ruscut.
-    
-    precision: "quantized", "fp16", or "full"
     """
     input_file = pathlib.Path(input_path)
     if not input_file.exists():
@@ -66,11 +61,6 @@ def remove_background(
     cmd = ["ruscut"]  # Use installed binary from PATH
     # For development builds, use: "./target/release/ruscut"
     
-    if precision == "fp16":
-        cmd.append("--fp16")
-    elif precision == "full":
-        cmd.append("--full")
-        
     if force_download:
         cmd.append("--force-download")
         
@@ -110,8 +100,6 @@ const path = require('path');
 function removeBackground(inputPath, outputPath, options = {}) {
     return new Promise((resolve, reject) => {
         const args = [];
-        if (options.fp16) args.push('--fp16');
-        if (options.full) args.push('--full');
         if (options.forceDownload) args.push('--force-download');
         
         args.push(inputPath);

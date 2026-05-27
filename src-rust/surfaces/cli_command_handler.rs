@@ -23,14 +23,6 @@ struct Args {
     #[arg(short, long, value_name = "MODEL_PATH")]
     model: Option<PathBuf>,
 
-    /// Download and use the high-precision FP16 model (88.2 MB) instead of quantized
-    #[arg(long)]
-    fp16: bool,
-
-    /// Download and use the full model (176 MB) instead of quantized
-    #[arg(long)]
-    full: bool,
-
     /// Force re-download the model even if it exists in cache
     #[arg(short, long)]
     force_download: bool,
@@ -50,7 +42,7 @@ impl CliCommandHandler {
 
         // 1. Validate input file
         if !args.input.exists() {
-            anyhow::bail!("File gambar input tidak ditemukan di path: {:?}", args.input);
+            anyhow::bail!("Input image file not found at path: {:?}", args.input);
         }
 
         // 2. Determine output file
@@ -61,20 +53,14 @@ impl CliCommandHandler {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if ext_str == "jpg" || ext_str == "jpeg" {
                 println!(
-                    "{} Format JPG tidak mendukung transparansi. Latar belakang yang dihapus akan berwarna hitam/putih. Disarankan menggunakan format PNG atau WebP.",
-                    "PERINGATAN:".yellow().bold()
+                    "{} JPG format does not support transparency. The removed background will appear as solid color. PNG or WebP is recommended.",
+                    "WARNING:".yellow().bold()
                 );
             }
         }
 
-        // 4. Determine model type
-        let model_type = if args.full {
-            ModelType::Full
-        } else if args.fp16 {
-            ModelType::Fp16
-        } else {
-            ModelType::Quantized
-        };
+        // 4. Model type is always Full (single model architecture)
+        let model_type = ModelType::Full;
 
         // 5. Map arguments to L1 Taxonomy value object
         let options = RemovalOptions {

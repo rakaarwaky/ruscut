@@ -44,7 +44,7 @@ impl BackgroundRemoverPort for OnnxRemoverAdapter {
         use std::time::Instant;
 
         let pb = ProgressBar::new_spinner();
-        pb.set_message("Memuat model AI ke ONNX Runtime...");
+        pb.set_message("Loading AI model into ONNX Runtime...");
         pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
         let start_time = Instant::now();
@@ -52,35 +52,35 @@ impl BackgroundRemoverPort for OnnxRemoverAdapter {
         // 1. Initialize Rmbg session using ort 2.0.0-rc.12
         let mut model = ort::session::Session::builder()?
             .commit_from_file(model_path)
-            .map_err(|e| anyhow!("Gagal memuat model: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to load model: {:?}", e))?;
 
-        pb.set_message("Membuka dan membaca gambar input...");
+        pb.set_message("Opening and reading input image...");
         
         // 2. Open input image
         let original_img = image::open(input_path)
-            .context("Gagal membuka gambar input. Pastikan path benar dan format didukung (JPG/PNG/WebP).")?;
+            .context("Failed to open input image. Verify the path is correct and the format is supported (JPG/PNG/WebP).")?;
 
-        pb.set_message("Menghapus latar belakang (AI Inferensi)...");
+        pb.set_message("Removing background (AI Inference)...");
 
         // 3. Process background removal (Inline Rmbg Logic)
         let img = preprocess_image(&original_img)?;
         let input = img.insert_axis(Axis(0));
         let input_tensor = ort::value::Tensor::from_array(input.clone())
-            .map_err(|e| anyhow!("Gagal membuat tensor input: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to create input tensor: {:?}", e))?;
         let inputs = ort::inputs![ML_MODEL_INPUT_NAME => input_tensor];
 
         let outputs = model.run(inputs)
-            .map_err(|e| anyhow!("Gagal menjalankan model: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to run model: {:?}", e))?;
 
         let (shape, slice) = outputs[ML_MODEL_OUTPUT_NAME]
             .try_extract_tensor::<f32>()
-            .map_err(|e| anyhow!("Gagal mengekstrak output tensor: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to extract output tensor: {:?}", e))?;
 
         let output_view = ndarray::ArrayView4::from_shape(
             (shape[0] as usize, shape[1] as usize, shape[2] as usize, shape[3] as usize),
             slice
         )
-            .map_err(|e| anyhow!("Shape output tensor tidak valid: {}", e))?;
+            .map_err(|e| anyhow!("Invalid output tensor shape: {}", e))?;
 
         let output_2d = output_view.slice(s![0, 0, .., ..]);
 
@@ -90,27 +90,27 @@ impl BackgroundRemoverPort for OnnxRemoverAdapter {
         let resized = resize_rgba(&image, original_width, original_height)?;
         let img_buffer =
             ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(original_width, original_height, resized)
-                .ok_or(anyhow!("Gagal membuat buffer gambar hasil resize mask"))?;
+                .ok_or(anyhow!("Failed to create image buffer for resized mask"))?;
         let mask = DynamicImage::ImageRgba8(img_buffer);
 
         let img_without_bg = apply_mask(&original_img, &mask);
 
-        pb.set_message("Menyimpan hasil gambar...");
+        pb.set_message("Saving resulting image...");
 
         // 4. Save transparent image (PNG/WebP)
         img_without_bg.save(output_path)
-            .context("Gagal menyimpan hasil gambar. Pastikan direktori output dapat ditulis.")?;
+            .context("Failed to save output image. Make sure the output directory is writable.")?;
 
         pb.finish_and_clear();
 
         let duration = start_time.elapsed();
         println!(
-            "{} Berhasil menghapus latar belakang dalam {:.2?}!",
-            "SUKSES:".green().bold(),
+            "{} Successfully removed background in {:.2?}!",
+            "SUCCESS:".green().bold(),
             duration
         );
         println!(
-            "{} Hasil disimpan ke: {}",
+            "{} Result saved to: {}",
             "OUTPUT:".green().bold(),
             output_path.to_string_lossy().underline()
         );
@@ -168,11 +168,11 @@ fn postprocess_image(
     let ma = model_result
         .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .ok_or(anyhow!("Gagal menemukan max value di output tensor"))?;
+        .ok_or(anyhow!("Failed to find max value in output tensor"))?;
     let mi = model_result
         .iter()
         .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .ok_or(anyhow!("Gagal menemukan min value di output tensor"))?;
+        .ok_or(anyhow!("Failed to find min value in output tensor"))?;
     let result = (model_result.mapv(|x| x - mi) / (ma - mi)) * 255.0;
 
     let result_u8 = result.mapv(|x| x as u8).into_raw_vec_and_offset().0;
@@ -194,8 +194,8 @@ fn resize_rgba(
     target_width: u32,
     target_height: u32,
 ) -> anyhow::Result<Vec<u8>> {
-    let width = NonZeroU32::new(img.width()).ok_or(anyhow!("Lebar gambar tidak valid"))?;
-    let height = NonZeroU32::new(img.height()).ok_or(anyhow!("Tinggi gambar tidak valid"))?;
+    let width = NonZeroU32::new(img.width()).ok_or(anyhow!("Invalid image width"))?;
+    let height = NonZeroU32::new(img.height()).ok_or(anyhow!("Invalid image height"))?;
     let mut src_image = fr::Image::from_vec_u8(
         width,
         height,
@@ -208,8 +208,8 @@ fn resize_rgba(
     alpha_mul_div.multiply_alpha_inplace(&mut src_image.view_mut())?;
 
     // Create container for data of destination image
-    let dst_width = NonZeroU32::new(target_width).ok_or(anyhow!("Lebar target tidak valid"))?;
-    let dst_height = NonZeroU32::new(target_height).ok_or(anyhow!("Tinggi target tidak valid"))?;
+    let dst_width = NonZeroU32::new(target_width).ok_or(anyhow!("Invalid target width"))?;
+    let dst_height = NonZeroU32::new(target_height).ok_or(anyhow!("Invalid target height"))?;
     let mut dst_image = fr::Image::new(dst_width, dst_height, src_image.pixel_type());
 
     // Get mutable view of destination image data

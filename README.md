@@ -24,7 +24,7 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 | **Cross-compile** | Single `cargo build --release` | Requires Docker / pyinstaller | N/A |
 | **Works offline** | Yes (after model download) | Yes (after model download) | No |
 | **AI Model** | BRIA RMBG-1.4 (ONNX) | U2Net / ISNET (ONNX) | Proprietary |
-| **Model variants** | Quantized / FP16 / Full | Single model | Managed |
+| **Model variants** | Full (Single Auto Model) | Single model | Managed |
 
 **Key Advantage**: `ruscut` is a zero-dependency standalone binary. No Python, no `pip`, no `virtualenv`. Download and run.
 
@@ -34,10 +34,7 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 
 - **Dual Interface**: Ships both a headless CLI (`ruscut`) for scripting and an interactive TUI wizard (`ruscut-tui`) for guided, menu-driven usage.
 - **Local AI Inference**: Fast background removal using ONNX Runtime. No external APIs or internet access required after the model is downloaded.
-- **Model Variety**: Supports three versions of the BRIA RMBG-1.4 model:
-  - **Quantized (44.4 MB)**: Default option. Extremely fast, lightweight, and low resource usage.
-  - **FP16 (88.2 MB)**: Good balance between size, speed, and precision.
-  - **Full Precision (176 MB)**: Maximum precision and quality.
+- **Single High-Precision Model**: Exclusively uses the **BRIA RMBG-1.4 Full Precision model (176 MB)** to ensure maximum accuracy and pixel-perfect quality out-of-the-box, without requiring complex parameter configurations.
 - **Hardware Acceleration**: High-performance resizing using `fast_image_resize` and hardware acceleration via ONNX Runtime (CPU/GPU).
 - **Auto Cache Management**: Automatic downloading and local caching of Hugging Face ONNX assets with progress bar tracking.
 - **Strict Architectural Integrity**: 100/100 AES architectural compliance score. Zero bypass, zero cyclic dependencies, and zero layer boundary violations.
@@ -122,12 +119,6 @@ ruscut input.jpg
 # Save to a custom output path
 ruscut input.jpg output.png
 
-# Use the FP16 precision model
-ruscut --fp16 input.jpg
-
-# Use the full precision model
-ruscut --full input.jpg
-
 # Force re-download the model
 ruscut --force-download input.jpg
 
@@ -146,8 +137,6 @@ Arguments:
 
 Options:
   -m, --model <MODEL_PATH>  Path to a custom .onnx model file
-      --fp16                Use the FP16 precision model (88.2 MB)
-      --full                Use the full precision model (176 MB)
   -f, --force-download      Force re-download the model from Hugging Face
   -h, --help                Print help
   -V, --version             Print version
