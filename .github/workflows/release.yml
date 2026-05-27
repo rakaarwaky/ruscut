@@ -19,42 +19,42 @@ jobs:
           # Linux x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name_cli: bg-remover
-            artifact_name_tui: bg-remover-tui
-            asset_name_cli: bg-remover-linux-x86_64
-            asset_name_tui: bg-remover-tui-linux-x86_64
+            artifact_name_cli: ruscut
+            artifact_name_tui: ruscut-tui
+            asset_name_cli: ruscut-linux-x86_64
+            asset_name_tui: ruscut-tui-linux-x86_64
 
           # Linux ARM64 (Raspberry Pi, AWS Graviton, etc.)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact_name_cli: bg-remover
-            artifact_name_tui: bg-remover-tui
-            asset_name_cli: bg-remover-linux-arm64
-            asset_name_tui: bg-remover-tui-linux-arm64
+            artifact_name_cli: ruscut
+            artifact_name_tui: ruscut-tui
+            asset_name_cli: ruscut-linux-arm64
+            asset_name_tui: ruscut-tui-linux-arm64
 
           # macOS Intel
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name_cli: bg-remover
-            artifact_name_tui: bg-remover-tui
-            asset_name_cli: bg-remover-macos-x86_64
-            asset_name_tui: bg-remover-tui-macos-x86_64
+            artifact_name_cli: ruscut
+            artifact_name_tui: ruscut-tui
+            asset_name_cli: ruscut-macos-x86_64
+            asset_name_tui: ruscut-tui-macos-x86_64
 
           # macOS Apple Silicon (M1/M2/M3)
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name_cli: bg-remover
-            artifact_name_tui: bg-remover-tui
-            asset_name_cli: bg-remover-macos-arm64
-            asset_name_tui: bg-remover-tui-macos-arm64
+            artifact_name_cli: ruscut
+            artifact_name_tui: ruscut-tui
+            asset_name_cli: ruscut-macos-arm64
+            asset_name_tui: ruscut-tui-macos-arm64
 
           # Windows x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name_cli: bg-remover.exe
-            artifact_name_tui: bg-remover-tui.exe
-            asset_name_cli: bg-remover-windows-x86_64.exe
-            asset_name_tui: bg-remover-tui-windows-x86_64.exe
+            artifact_name_cli: ruscut.exe
+            artifact_name_tui: ruscut-tui.exe
+            asset_name_cli: ruscut-windows-x86_64.exe
+            asset_name_tui: ruscut-tui-windows-x86_64.exe
 
     steps:
       - name: Checkout repository
