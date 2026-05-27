@@ -230,12 +230,49 @@ fn apply_mask(original_image: &DynamicImage, mask_image: &DynamicImage) -> Dynam
 
     for (x, y, pixel) in no_bg_image.enumerate_pixels_mut() {
         let orig_pixel = original_image.get_pixel(x, y);
-        *pixel = Rgba([
-            orig_pixel[0],
-            orig_pixel[1],
-            orig_pixel[2],
-            mask_image.get_pixel(x, y)[0],
-        ]);
+        let raw_alpha = mask_image.get_pixel(x, y)[0] as f32 / 255.0;
+
+        // 1. Apply edge sharpening / contrast enhancement to the alpha mask
+        // This cuts off the outer blurry, heavily dark-blended pixels.
+        let low_threshold = 0.15;
+        let high_threshold = 0.85;
+        let sharpened_alpha = if raw_alpha < low_threshold {
+            0.0
+        } else if raw_alpha > high_threshold {
+            1.0
+        } else {
+            (raw_alpha - low_threshold) / (high_threshold - low_threshold)
+        };
+
+        // Smooth transition curve (smoothstep)
+        let smooth_alpha = sharpened_alpha * sharpened_alpha * (3.0 - 2.0 * sharpened_alpha);
+        let alpha_u8 = (smooth_alpha * 255.0).round() as u8;
+
+        if alpha_u8 == 0 {
+            *pixel = Rgba([0, 0, 0, 0]);
+        } else {
+            // 2. Perform Un-premultiplied Alpha color reconstruction.
+            // Since the original image background is black (0, 0, 0), the original RGB channels
+            // are premultiplied by the mask coverage: C_orig = C_fg * raw_alpha.
+            // To get the true, un-blended foreground color: C_fg = C_orig / raw_alpha.
+            let r = if raw_alpha > 0.01 {
+                ((orig_pixel[0] as f32 / raw_alpha).round() as u32).min(255) as u8
+            } else {
+                orig_pixel[0]
+            };
+            let g = if raw_alpha > 0.01 {
+                ((orig_pixel[1] as f32 / raw_alpha).round() as u32).min(255) as u8
+            } else {
+                orig_pixel[1]
+            };
+            let b = if raw_alpha > 0.01 {
+                ((orig_pixel[2] as f32 / raw_alpha).round() as u32).min(255) as u8
+            } else {
+                orig_pixel[2]
+            };
+
+            *pixel = Rgba([r, g, b, alpha_u8]);
+        }
     }
     DynamicImage::ImageRgba8(no_bg_image)
 }
