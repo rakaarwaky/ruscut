@@ -14,7 +14,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Clear screen and show header
-clear
+clear || true
 echo -e "${BOLD}${BLUE}"
 echo "=========================================================="
 echo "    ____                         __                       "

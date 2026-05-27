@@ -10,9 +10,9 @@ pub enum ModelType {
 impl ModelType {
     pub fn url(&self) -> &'static str {
         match self {
-            ModelType::Quantized => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/model_quantized.onnx",
-            ModelType::Fp16 => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/model_fp16.onnx",
-            ModelType::Full => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/model.onnx",
+            ModelType::Quantized => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx",
+            ModelType::Fp16 => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_fp16.onnx",
+            ModelType::Full => "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx",
         }
     }
 
