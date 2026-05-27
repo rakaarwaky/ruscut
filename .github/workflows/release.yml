@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name_cli: bg-remover
+            artifact_name_tui: bg-remover-tui
+            asset_name_cli: bg-remover-linux-x86_64
+            asset_name_tui: bg-remover-tui-linux-x86_64
+
+          # Linux ARM64 (Raspberry Pi, AWS Graviton, etc.)
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name_cli: bg-remover
+            artifact_name_tui: bg-remover-tui
+            asset_name_cli: bg-remover-linux-arm64
+            asset_name_tui: bg-remover-tui-linux-arm64
+
+          # macOS Intel
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name_cli: bg-remover
+            artifact_name_tui: bg-remover-tui
+            asset_name_cli: bg-remover-macos-x86_64
+            asset_name_tui: bg-remover-tui-macos-x86_64
+
+          # macOS Apple Silicon (M1/M2/M3)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name_cli: bg-remover
+            artifact_name_tui: bg-remover-tui
+            asset_name_cli: bg-remover-macos-arm64
+            asset_name_tui: bg-remover-tui-macos-arm64
+
+          # Windows x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name_cli: bg-remover.exe
+            artifact_name_tui: bg-remover-tui.exe
+            asset_name_cli: bg-remover-windows-x86_64.exe
+            asset_name_tui: bg-remover-tui-windows-x86_64.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Required for cross-compiling Linux ARM64
+      - name: Install cross-compilation tools (Linux ARM64 only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Set cross-linker (Linux ARM64 only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename CLI binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name_cli }} ${{ matrix.asset_name_cli }}
+
+      - name: Rename TUI binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name_tui }} ${{ matrix.asset_name_tui }}
+
+      - name: Upload CLI binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset_name_cli }}
+          generate_release_notes: true
+
+      - name: Upload TUI binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset_name_tui }}
