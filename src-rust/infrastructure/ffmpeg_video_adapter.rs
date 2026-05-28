@@ -124,6 +124,8 @@ impl VideoProcessorPort for FfmpegVideoAdapter {
                 &format!("fps={}", fps),
                 &temp_dir.join("frame_%04d.png").to_string_lossy(),
             ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status()
             .context("Failed to execute ffmpeg for frame extraction")?;
 
@@ -234,6 +236,8 @@ impl VideoProcessorPort for FfmpegVideoAdapter {
                     "-shortest",
                     &output_path.to_string_lossy(),
                 ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
                 .status()
                 .context("Failed to execute ffmpeg for transparent video encoding")?;
 

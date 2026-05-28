@@ -16,16 +16,44 @@ fn init_tracing(config: &AppConfig) {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(format!("ruscut={}", config.app.log_level)));
 
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(true)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_line_number(true),
-        )
-        .init();
+    let cache_dir = if let Some(mut path) = dirs::cache_dir() {
+        path.push("ruscut");
+        path
+    } else {
+        std::path::PathBuf::from(".cache")
+    };
+
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let log_file_path = cache_dir.join("ruscut.log");
+
+    if let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file_path)
+    {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(file)
+                    .with_target(true)
+                    .with_thread_ids(true)
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .with_thread_ids(true)
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .init();
+    }
 }
 
 fn main() {
@@ -49,7 +77,14 @@ fn main() {
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "Ruscut CLI starting");
 
-    let container = agent::DependencyInjectionContainer::new();
+    let container = match agent::DependencyInjectionContainer::new() {
+        Ok(c) => c,
+        Err(err) => {
+            tracing::error!(error = %err, "Initialization failed");
+            eprintln!("{} {:?}", "ERROR:".red().bold(), err);
+            std::process::exit(1);
+        }
+    };
     let orchestrator = agent::BgRemoverOrchestrator::new(container.get_usecase());
 
     let handler = CliCommandHandler::new();

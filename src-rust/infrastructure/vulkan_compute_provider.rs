@@ -47,6 +47,7 @@ impl VulkanComputeEngine {
 
         let mut selected_gpu = None;
         let mut selected_queue_family = None;
+        let mut selected_device_type = vk::PhysicalDeviceType::default();
 
         for &phys_device in &physical_devices {
             let props = unsafe { instance.get_physical_device_properties(phys_device) };
@@ -55,6 +56,7 @@ impl VulkanComputeEngine {
                     .to_string_lossy()
                     .into_owned()
             };
+            let device_type = props.device_type;
 
             // Find a queue family that supports compute operations
             let queue_families =
@@ -69,19 +71,32 @@ impl VulkanComputeEngine {
             }
 
             if let Some(queue_idx) = compute_family_idx {
-                // Highly prioritize AMD GPUs (particularly RX 6800 XT)
+                let is_discrete = device_type == vk::PhysicalDeviceType::DISCRETE_GPU;
                 let is_amd = device_name.to_lowercase().contains("amd")
                     || device_name.to_lowercase().contains("radeon")
                     || props.vendor_id == 0x1002;
 
-                if is_amd {
+                // Priority: Discrete AMD GPU > Any Discrete GPU > Integrated AMD GPU > Any other
+                let should_select = match (is_discrete, is_amd, selected_gpu.is_some()) {
+                    (true, true, _) => true, // Always prefer discrete AMD
+                    (true, false, true) => {
+                        // Replace non-AMD discrete with any discrete? No
+                        selected_device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+                    }
+                    (true, false, false) => true, // First discrete GPU found
+                    (false, true, false) => {
+                        selected_device_type == vk::PhysicalDeviceType::CPU
+                            || selected_device_type == vk::PhysicalDeviceType::OTHER
+                            || selected_device_type == vk::PhysicalDeviceType::VIRTUAL_GPU
+                    }
+                    _ => false,
+                };
+
+                if should_select {
+                    tracing::info!("Selecting GPU: {} (type: {:?})", device_name, device_type);
                     selected_gpu = Some((phys_device, device_name));
                     selected_queue_family = Some(queue_idx);
-                    // RX 6800 XT found, break early
-                    break;
-                } else if selected_gpu.is_none() {
-                    selected_gpu = Some((phys_device, device_name));
-                    selected_queue_family = Some(queue_idx);
+                    selected_device_type = device_type;
                 }
             }
         }

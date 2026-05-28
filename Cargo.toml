@@ -15,7 +15,7 @@ exclude = [".github", "*.sh", "target"]
 default = []
 
 [dependencies]
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-21", "copy-dylibs", "download-binaries", "tls-rustls"] }
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-21", "copy-dylibs", "download-binaries", "tls-rustls", "rocm"] }
 image = "0.25"
 fast_image_resize = "3.0"
 ndarray = { version = "0.17", features = ["std"] }

@@ -2,7 +2,7 @@
 
 A high-performance, AI-powered background remover CLI and TUI tool written in Rust.
 
-`ruscut` leverages ONNX Runtime (`ort`) and the state-of-the-art **BRIA RMBG-2.0** model to perform pixel-perfect, local background removal. The application ships two standalone binaries — a scriptable CLI (`ruscut`) and a guided interactive TUI (`ruscut-tui`) — and is built on a strict **AES (Architecture Enforcement System) Clean Architecture** to ensure clean layer separation, loose coupling, and high testability.
+`ruscut` leverages ONNX Runtime (`ort`) and the state-of-the-art **BRIA RMBG-2.0** model to perform pixel-perfect, local background removal. The application ships two standalone binaries — a scriptable CLI (`ruscut`) and a guided interactive TUI (`ruscut-tui`) — and is built on a strict **AES (Agentic Engineering System) Clean Architecture** to ensure clean layer separation, loose coupling, and high testability.
 
 ---
 
@@ -10,21 +10,21 @@ A high-performance, AI-powered background remover CLI and TUI tool written in Ru
 
 The most widely used open-source background removal tool is **rembg** (21,700+ GitHub stars). Below is a direct comparison:
 
-| Feature | **ruscut** (This project) | **rembg** (Python) | **remove.bg** (SaaS) |
-|---|---|---|---|
-| **Language** | Rust | Python | Cloud API |
-| **Runtime required** | None — standalone binary | Python 3 + pip | Internet + API key |
-| **Privacy** | 100% local, zero upload | 100% local | Images uploaded to cloud |
-| **Cost** | Free, open-source | Free, open-source | Paid (per image) |
-| **Interactive TUI** | Yes — `ruscut-tui` | No | No |
-| **Install** | `./install.sh` or `cargo install` | `pip install rembg` | API key signup |
-| **Binary size** | ~5 MB (Rust binary) | ~150 MB+ (Python env) | N/A |
-| **Cold start speed** | Fast (compiled native code) | Slow (Python interpreter) | Depends on network |
-| **Memory usage** | Low (Rust zero-cost abstractions) | High (Python overhead) | N/A |
-| **Cross-compile** | Single `cargo build --release` | Requires Docker / pyinstaller | N/A |
-| **Works offline** | Yes (after model download) | Yes (after model download) | No |
-| **AI Model** | BRIA RMBG-2.0 (ONNX) | U2Net / ISNET (ONNX) | Proprietary |
-| **Model variants** | Full (Single Auto Model) | Single model | Managed |
+| Feature                    | **ruscut** (This project)       | **rembg** (Python)      | **remove.bg** (SaaS) |
+| -------------------------- | ------------------------------------- | ----------------------------- | -------------------------- |
+| **Language**         | Rust                                  | Python                        | Cloud API                  |
+| **Runtime required** | None — standalone binary             | Python 3 + pip                | Internet + API key         |
+| **Privacy**          | 100% local, zero upload               | 100% local                    | Images uploaded to cloud   |
+| **Cost**             | Free, open-source                     | Free, open-source             | Paid (per image)           |
+| **Interactive TUI**  | Yes —`ruscut-tui`                  | No                            | No                         |
+| **Install**          | `./install.sh` or `cargo install` | `pip install rembg`         | API key signup             |
+| **Binary size**      | ~5 MB (Rust binary)                   | ~150 MB+ (Python env)         | N/A                        |
+| **Cold start speed** | Fast (compiled native code)           | Slow (Python interpreter)     | Depends on network         |
+| **Memory usage**     | Low (Rust zero-cost abstractions)     | High (Python overhead)        | N/A                        |
+| **Cross-compile**    | Single `cargo build --release`      | Requires Docker / pyinstaller | N/A                        |
+| **Works offline**    | Yes (after model download)            | Yes (after model download)    | No                         |
+| **AI Model**         | BRIA RMBG-2.0 (ONNX)                  | U2Net / ISNET (ONNX)          | Proprietary                |
+| **Model variants**   | Full (Single Auto Model)              | Single model                  | Managed                    |
 
 **Key Advantage**: `ruscut` is a zero-dependency standalone binary. No Python, no `pip`, no `virtualenv`. Download and run.
 
@@ -45,13 +45,14 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 
 Before installation, ensure your system meets the following requirements:
 
-| Requirement | Minimum | Notes |
-|---|---|---|
-| OS | Linux x64 / macOS (Intel/Apple Silicon) / Windows x64 | Pre-built binaries available for all platforms |
-| RAM | 2 GB | 4 GB recommended for Full Precision model |
-| Disk Space | 500 MB | Includes model cache (~44–176 MB depending on variant) |
-| Internet | Required once | Only for initial model download from Hugging Face |
-| Rust | 1.75+ | Only needed if building from source |
+| Requirement    | Minimum                   | Notes                                                                                                         |
+| :------------- | :------------------------ | :------------------------------------------------------------------------------------------------------------ |
+| OS             | Linux x64 / Windows x64   | Requires Vulkan 1.3 runtime environment                                                                       |
+| Hardware (GPU) | Vulkan 1.3 compatible GPU | Strictly required. CPU fallback is disabled. Prioritizes discrete AMD GPUs (Navi 21 / AMD Radeon RX 6800 XT). |
+| RAM            | 4 GB                      | 8 GB recommended for model loading and frame processing                                                       |
+| Disk Space     | 2 GB                      | Includes model cache (~1.02 GB for BRIA RMBG-2.0)                                                             |
+| Internet       | Required once             | Only for initial model download from Hugging Face                                                             |
+| Rust           | 1.75+                     | Only needed if compiling from source                                                                          |
 
 ---
 
@@ -90,13 +91,13 @@ Requirements: Rust toolchain (`cargo`, `rustfmt`, `clippy`)
 
 Download the latest release binary for your platform from the [GitHub Releases](https://github.com/rakaarwaky/ruscut/releases) page:
 
-| Platform | CLI Binary | TUI Binary |
-|---|---|---|
-| Linux x86_64 | `ruscut-linux-x86_64` | `ruscut-tui-linux-x86_64` |
-| Linux ARM64 | `ruscut-linux-arm64` | `ruscut-tui-linux-arm64` |
-| macOS Intel | `ruscut-macos-x86_64` | `ruscut-tui-macos-x86_64` |
-| macOS Apple Silicon | `ruscut-macos-arm64` | `ruscut-tui-macos-arm64` |
-| Windows x64 | `ruscut-windows-x86_64.exe` | `ruscut-tui-windows-x86_64.exe` |
+| Platform            | CLI Binary                    | TUI Binary                        |
+| ------------------- | ----------------------------- | --------------------------------- |
+| Linux x86_64        | `ruscut-linux-x86_64`       | `ruscut-tui-linux-x86_64`       |
+| Linux ARM64         | `ruscut-linux-arm64`        | `ruscut-tui-linux-arm64`        |
+| macOS Intel         | `ruscut-macos-x86_64`       | `ruscut-tui-macos-x86_64`       |
+| macOS Apple Silicon | `ruscut-macos-arm64`        | `ruscut-tui-macos-arm64`        |
+| Windows x64         | `ruscut-windows-x86_64.exe` | `ruscut-tui-windows-x86_64.exe` |
 
 Each release includes a `checksums.txt` with SHA-256 hashes for supply-chain verification.
 
@@ -163,12 +164,12 @@ Options:
 
 All developer scripts live in `scripts/` and require a bash shell.
 
-| Script | Purpose | Prerequisites |
-|---|---|---|
-| `scripts/dev.sh` | Quality gates (fmt + clippy) then build & install locally | Rust toolchain |
-| `scripts/bump.sh` | Bump version locally — no push, no tag, no publish | `cargo-release` |
+| Script                 | Purpose                                                      | Prerequisites                              |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------ |
+| `scripts/dev.sh`     | Quality gates (fmt + clippy) then build & install locally    | Rust toolchain                             |
+| `scripts/bump.sh`    | Bump version locally — no push, no tag, no publish          | `cargo-release`                          |
 | `scripts/release.sh` | Full release: changelog → bump → tag → push (triggers CI) | `cargo-release`, optional: `git-cliff` |
-| `scripts/install.sh` | Download & install pre-built binaries from GitHub Releases | `curl`, `jq` |
+| `scripts/install.sh` | Download & install pre-built binaries from GitHub Releases   | `curl`, `jq`                           |
 
 ### Typical development cycle
 
@@ -204,7 +205,7 @@ brew install jq       # macOS
 
 ## Architecture Specification (AES)
 
-The project is structured according to the strict 6-layer Architecture Enforcement System (AES):
+The project is structured according to the strict 6-layer Agentic Engineering System (AES):
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -287,11 +288,11 @@ src-rust/
 
 Downloaded models are automatically cached to avoid re-downloading:
 
-| OS | Cache Path |
-|---|---|
-| Linux | `~/.cache/ruscut/` |
-| macOS | `~/Library/Caches/ruscut/` |
-| Windows | `%LOCALAPPDATA%\ruscut\` |
+| OS      | Cache Path                   |
+| ------- | ---------------------------- |
+| Linux   | `~/.cache/ruscut/`         |
+| macOS   | `~/Library/Caches/ruscut/` |
+| Windows | `%LOCALAPPDATA%\ruscut\`   |
 
 ---
 

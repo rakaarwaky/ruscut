@@ -1,11 +1,12 @@
 use crate::contract::OnnxRemoverPort;
 use crate::taxonomy::{EngineNameVo, ModelPathVo, TensorDataVo};
 use anyhow::anyhow;
+use ort::session::Session;
 use std::sync::{Arc, Mutex};
 
 struct CachedSession {
     model_path: String,
-    session: Arc<Mutex<ort::session::Session>>,
+    session: Arc<Mutex<Session>>,
 }
 
 pub struct OnnxRemoverAdapter {
@@ -24,7 +25,7 @@ impl OnnxRemoverAdapter {
     fn load_or_reuse_session(
         &self,
         model_path: &ModelPathVo,
-    ) -> anyhow::Result<Arc<Mutex<ort::session::Session>>> {
+    ) -> anyhow::Result<Arc<Mutex<Session>>> {
         let model_path_str = model_path.as_path().to_string_lossy().to_string();
 
         let mut cache = self.cache.lock().expect("Failed to lock model cache mutex");
@@ -33,7 +34,15 @@ impl OnnxRemoverAdapter {
         {
             return Ok(Arc::clone(&cached.session));
         }
-        let mut builder = ort::session::Session::builder()?;
+
+        let mut builder = Session::builder()
+            .map_err(|e| anyhow!("Failed to create session builder: {:?}", e))?
+            .with_parallel_execution(true)
+            .map_err(|e| anyhow!("Failed to set parallel execution: {:?}", e))?
+            .with_inter_threads(6)
+            .map_err(|e| anyhow!("Failed to set inter threads: {:?}", e))?
+            .with_intra_threads(6)
+            .map_err(|e| anyhow!("Failed to set intra threads: {:?}", e))?;
 
         let session = Arc::new(Mutex::new(
             builder
@@ -58,7 +67,7 @@ impl Default for OnnxRemoverAdapter {
 
 impl OnnxRemoverPort for OnnxRemoverAdapter {
     fn onnx_get_engine_name(&self) -> EngineNameVo {
-        EngineNameVo::new("ONNX Runtime")
+        EngineNameVo::new("ONNX Runtime (CPU)")
     }
 
     fn onnx_run_inference(

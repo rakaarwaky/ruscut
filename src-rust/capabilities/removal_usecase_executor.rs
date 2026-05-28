@@ -28,15 +28,13 @@ impl RemovalUseCase {
         video_processor: Arc<dyn VideoProcessorPort>,
         image_processor: Arc<dyn ImageProcessorProtocol>,
     ) -> Self {
-        let use_gpu =
-            std::env::var("RUSCUT_DIRECT_GPU").is_ok() || std::env::var("RUSCUT_VULKAN").is_ok();
         Self {
             downloader,
             onnx_remover,
             direct_remover,
             video_processor,
             image_processor,
-            use_gpu,
+            use_gpu: true,
         }
     }
 
@@ -46,18 +44,15 @@ impl RemovalUseCase {
         direct_remover: Arc<dyn DirectAmdgpuRemoverPort>,
         video_processor: Arc<dyn VideoProcessorPort>,
         image_processor: Arc<dyn ImageProcessorProtocol>,
-        use_gpu: bool,
+        _use_gpu: bool,
     ) -> Self {
-        let use_gpu = use_gpu
-            || std::env::var("RUSCUT_DIRECT_GPU").is_ok()
-            || std::env::var("RUSCUT_VULKAN").is_ok();
         Self {
             downloader,
             onnx_remover,
             direct_remover,
             video_processor,
             image_processor,
-            use_gpu,
+            use_gpu: true,
         }
     }
 
@@ -82,12 +77,29 @@ impl RemovalUseCase {
                 .onnx_run_inference(&model_vo, &tensor_vo)?
         };
 
+        let original_width = original_img.width();
+        let original_height = original_img.height();
+
         let mask_img = self
             .image_processor
             .processor_postprocess(&raw_output.data)?;
+
+        let resized_mask_bytes =
+            self.image_processor
+                .processor_resize(&mask_img, original_width, original_height)?;
+        let mask_buffer = ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+            original_width,
+            original_height,
+            resized_mask_bytes,
+        )
+        .ok_or_else(|| {
+            anyhow::anyhow!("Failed to create mask buffer matching original image dimensions")
+        })?;
+        let mask_img_resized = DynamicImage::ImageRgba8(mask_buffer);
+
         let final_img = self
             .image_processor
-            .processor_apply_mask(&original_img, &mask_img);
+            .processor_apply_mask(&original_img, &mask_img_resized);
 
         final_img
             .save(output_path)

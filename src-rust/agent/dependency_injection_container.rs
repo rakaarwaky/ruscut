@@ -16,7 +16,7 @@ pub struct DependencyInjectionContainer {
 }
 
 impl DependencyInjectionContainer {
-    pub fn new() -> Self {
+    pub fn new() -> anyhow::Result<Self> {
         let config = AppConfig::load().unwrap_or_else(|e| {
             eprintln!("Failed to load config: {}. Using defaults.", e);
             AppConfig::default()
@@ -25,24 +25,17 @@ impl DependencyInjectionContainer {
         let downloader = Arc::new(HuggingfaceModelAdapter::new());
         let onnx_remover = Arc::new(OnnxRemoverAdapter::new());
 
-        let mut gpu_available = false;
-        let direct_remover = match VulkanComputeEngine::new() {
-            Ok(engine) => {
-                eprintln!("[RUSCUT] Vulkan GPU engine initialized successfully");
-                Arc::new(DirectAmdgpuRemoverAdapter::with_engine(Arc::new(engine)))
-            }
-            Err(e) => {
-                eprintln!(
-                    "[RUSCUT] Vulkan GPU unavailable ({}), using CPU fallback",
-                    e
-                );
-                Arc::new(DirectAmdgpuRemoverAdapter::new())
-            }
-        };
+        // We forbid CPU-only, so we MUST successfully initialize VulkanComputeEngine.
+        let engine = VulkanComputeEngine::new().map_err(|e| {
+            anyhow::anyhow!(
+                "Vulkan GPU engine is not running/available: {}. CPU-only execution is forbidden.",
+                e
+            )
+        })?;
 
-        if std::env::var("RUSCUT_DIRECT_GPU").is_ok() || std::env::var("RUSCUT_VULKAN").is_ok() {
-            gpu_available = true;
-        }
+        tracing::info!("Vulkan GPU engine initialized successfully");
+        let direct_remover = Arc::new(DirectAmdgpuRemoverAdapter::with_engine(Arc::new(engine)));
+        let gpu_available = true;
 
         let video_processor = Arc::new(FfmpegVideoAdapter::new());
         let image_processor = Arc::new(ImageDataProcessor::new());
@@ -56,10 +49,10 @@ impl DependencyInjectionContainer {
             gpu_available,
         ));
 
-        Self {
+        Ok(Self {
             removal_usecase,
             config,
-        }
+        })
     }
 
     pub fn config(&self) -> &AppConfig {
@@ -76,11 +69,5 @@ impl DiContainerAggregate for DependencyInjectionContainer {
     /// Returns a clone of the inner `Arc<dyn RemovalUseCaseProtocol>`.
     fn get_usecase(&self) -> Arc<dyn RemovalUseCaseProtocol> {
         Arc::clone(&self.removal_usecase)
-    }
-}
-
-impl Default for DependencyInjectionContainer {
-    fn default() -> Self {
-        Self::new()
     }
 }
