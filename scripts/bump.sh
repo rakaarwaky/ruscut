@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bump.sh - Local Version Bump (No Push, No Publish, No Tag)
-# Uses cargo-release for safe TOML parsing.
+# Commits any pending changes, then bumps the version locally.
 # Prerequisite: cargo install cargo-release
 #
 # Usage (from any directory):
@@ -37,10 +37,17 @@ fi
 
 CURRENT=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
 echo "📝 Bumping version ($BUMP_TYPE) from $CURRENT..."
-echo "   Working directory: $PROJECT_ROOT"
 
-# cargo-release modifies Cargo.toml & Cargo.lock using native TOML parser (100% safe)
-# Flags below prevent push, tag, or publish — local-only version bump
+# If there are uncommitted changes, commit them first so cargo-release gets a clean tree
+if ! git diff --quiet || ! git diff --cached --quiet || git ls-files --others --exclude-standard | grep -q .; then
+    echo "   Uncommitted changes detected — committing before bump..."
+    git add -A
+    git commit -m "chore: save work before version bump"
+    echo "   ✅ Changes committed."
+fi
+
+# cargo-release bumps Cargo.toml & Cargo.lock, commits as "chore: release vX.Y.Z"
+# --no-push / --no-tag / --no-publish: local only
 if ! cargo release "$BUMP_TYPE" \
     --execute \
     --no-publish \
@@ -49,10 +56,7 @@ if ! cargo release "$BUMP_TYPE" \
     --no-confirm \
     --allow-branch "*"; then
     echo ""
-    echo "❌ cargo-release failed. Common causes:"
-    echo "   - Uncommitted changes in working tree (run: git status)"
-    echo "   - Invalid version bump type"
-    echo "   Current version: $CURRENT"
+    echo "❌ cargo-release failed."
     exit 1
 fi
 
