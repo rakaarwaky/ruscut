@@ -4,6 +4,7 @@ use colored::Colorize;
 use crate::contract::ModelDownloaderPort;
 use crate::taxonomy::removal_types_vo::{get_cache_dir, ModelType};
 
+/// Adapter that downloads ONNX models from HuggingFace Hub with progress tracking.
 pub struct HuggingfaceModelAdapter {
     enabled: bool,
 }
@@ -42,6 +43,9 @@ impl ModelDownloaderPort for HuggingfaceModelAdapter {
     }
 }
 
+/// Download buffer size (16 KB).
+const DOWNLOAD_BUFFER_SIZE: usize = 16384;
+
 fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow::Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
     use std::io::{Read, Write};
@@ -53,9 +57,31 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
     );
     println!("{} Downloading model from Hugging Face...", "INFO:".blue().bold());
 
-    let mut response = reqwest::blocking::get(url)
+    let client = reqwest::blocking::Client::builder()
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let mut request = client.get(url);
+    if let Ok(token) = std::env::var("HF_TOKEN") && !token.is_empty() {
+        request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token));
+    }
+
+    let mut response = request
+        .send()
         .context("Failed to execute HTTP request to download model")?;
-        
+
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED
+        || response.status() == reqwest::StatusCode::FORBIDDEN
+    {
+        anyhow::bail!(
+            "Access denied to model. This model ({}) requires authentication.\n\
+             Please set the HF_TOKEN environment variable with your Hugging Face token:\n\
+             $ export HF_TOKEN=hf_your_token_here\n\
+             Get a token at: https://huggingface.co/settings/tokens",
+            model_label
+        );
+    }
+
     if !response.status().is_success() {
         anyhow::bail!("Failed to download model: HTTP status {}", response.status());
     }
@@ -80,7 +106,7 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
     }
 
     let mut file = std::fs::File::create(dest_path).context("Failed to create model file in cache")?;
-    let mut buffer = [0; 16384]; // 16KB buffer
+    let mut buffer = [0; DOWNLOAD_BUFFER_SIZE];
     loop {
         let bytes_read = response
             .read(&mut buffer)

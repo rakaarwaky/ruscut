@@ -1,8 +1,8 @@
 [package]
 name = "ruscut"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
-description = "AI-powered background remover CLI and TUI built in Rust using ONNX/BRIA RMBG-1.4"
+description = "AI-powered background remover CLI and TUI built in Rust using ONNX/BRIA RMBG-2.0"
 license = "MIT"
 repository = "https://github.com/rakaarwaky/ruscut"
 homepage = "https://github.com/rakaarwaky/ruscut"
@@ -10,6 +10,10 @@ keywords = ["background-removal", "ai", "image", "cli", "onnx"]
 categories = ["command-line-utilities", "multimedia::images"]
 readme = "README.md"
 exclude = [".github", "*.sh", "target"]
+
+[features]
+default = []
+rocm = ["ort/rocm"]
 
 [dependencies]
 ort = "2.0.0-rc.12"
@@ -23,6 +27,7 @@ anyhow = "1.0"
 colored = "2.1"
 dirs = "5.0"
 dialoguer = "0.12.0"
+tokio = { version = "1", features = ["full"] }
 
 [[bin]]
 name = "ruscut"

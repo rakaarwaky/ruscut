@@ -2,7 +2,7 @@
 
 A high-performance, AI-powered background remover CLI and TUI tool written in Rust.
 
-`ruscut` leverages ONNX Runtime (`ort`) and the state-of-the-art **BRIA RMBG-1.4** model to perform pixel-perfect, local background removal. The application ships two standalone binaries — a scriptable CLI (`ruscut`) and a guided interactive TUI (`ruscut-tui`) — and is built on a strict **AES (Architecture Enforcement System) Clean Architecture** to ensure clean layer separation, loose coupling, and high testability.
+`ruscut` leverages ONNX Runtime (`ort`) and the state-of-the-art **BRIA RMBG-2.0** model to perform pixel-perfect, local background removal. The application ships two standalone binaries — a scriptable CLI (`ruscut`) and a guided interactive TUI (`ruscut-tui`) — and is built on a strict **AES (Architecture Enforcement System) Clean Architecture** to ensure clean layer separation, loose coupling, and high testability.
 
 ---
 
@@ -23,7 +23,7 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 | **Memory usage** | Low (Rust zero-cost abstractions) | High (Python overhead) | N/A |
 | **Cross-compile** | Single `cargo build --release` | Requires Docker / pyinstaller | N/A |
 | **Works offline** | Yes (after model download) | Yes (after model download) | No |
-| **AI Model** | BRIA RMBG-1.4 (ONNX) | U2Net / ISNET (ONNX) | Proprietary |
+| **AI Model** | BRIA RMBG-2.0 (ONNX) | U2Net / ISNET (ONNX) | Proprietary |
 | **Model variants** | Full (Single Auto Model) | Single model | Managed |
 
 **Key Advantage**: `ruscut` is a zero-dependency standalone binary. No Python, no `pip`, no `virtualenv`. Download and run.
@@ -34,7 +34,7 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 
 - **Dual Interface**: Ships both a headless CLI (`ruscut`) for scripting and an interactive TUI wizard (`ruscut-tui`) for guided, menu-driven usage.
 - **Local AI Inference**: Fast background removal using ONNX Runtime. No external APIs or internet access required after the model is downloaded.
-- **Single High-Precision Model**: Exclusively uses the **BRIA RMBG-1.4 Full Precision model (176 MB)** to ensure maximum accuracy and pixel-perfect quality out-of-the-box, without requiring complex parameter configurations.
+- **Single High-Precision Model**: Exclusively uses the **BRIA RMBG-2.0 model (1.02 GB)** to ensure maximum accuracy and pixel-perfect quality out-of-the-box, without requiring complex parameter configurations.
 - **Hardware Acceleration**: High-performance resizing using `fast_image_resize` and hardware acceleration via ONNX Runtime (CPU/GPU).
 - **Auto Cache Management**: Automatic downloading and local caching of Hugging Face ONNX assets with progress bar tracking.
 - **Strict Architectural Integrity**: 100/100 AES architectural compliance score. Zero bypass, zero cyclic dependencies, and zero layer boundary violations.
@@ -224,4 +224,4 @@ Downloaded models are automatically cached to avoid re-downloading:
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-The underlying AI model BRIA RMBG-1.4 is subject to its own license conditions. Please check [Bria AI](https://bria.ai/) licensing guidelines for commercial purposes.
+The underlying AI model BRIA RMBG-2.0 is subject to its own license conditions. Please check [Bria AI](https://bria.ai/) licensing guidelines for commercial purposes.

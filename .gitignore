@@ -1,8 +1,5 @@
 # Rust build artifacts
 /target
 
-# Local development tools (symlinks to local machine paths)
-/auto_linter
-
 # Test files and outputs
 /test

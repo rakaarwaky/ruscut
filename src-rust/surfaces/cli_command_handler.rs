@@ -2,8 +2,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use crate::agent::BgRemoverOrchestrator;
+use crate::contract::BgRemoverAggregate;
 use crate::taxonomy::removal_types_vo::{get_default_output_path, ModelType, RemovalOptions};
-use crate::contract::RemovalTransferAggregate;
+use crate::taxonomy::RemovalTransferVo;
 
 #[derive(Parser, Debug)]
 #[command(name = "ruscut")]
@@ -19,7 +20,7 @@ struct Args {
     #[arg(value_name = "OUTPUT")]
     output: Option<PathBuf>,
 
-    /// Path to a custom .onnx model file instead of auto-downloading BRIA RMBG-1.4
+    /// Path to a custom .onnx model file instead of auto-downloading BRIA RMBG-2.0
     #[arg(short, long, value_name = "MODEL_PATH")]
     model: Option<PathBuf>,
 
@@ -28,27 +29,27 @@ struct Args {
     force_download: bool,
 }
 
+/// CLI surface handler that parses arguments and delegates to the orchestrator.
+#[derive(Default)]
 pub struct CliCommandHandler {
-    _dummy: bool,
+    _initialized: bool,
 }
 
 impl CliCommandHandler {
     pub fn new() -> Self {
-        Self { _dummy: true }
+        Self { _initialized: false }
     }
 
+    /// Parse CLI args via clap and execute background removal.
     pub fn run(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
         let args = Args::parse();
 
-        // 1. Validate input file
         if !args.input.exists() {
             anyhow::bail!("Input image file not found at path: {:?}", args.input);
         }
 
-        // 2. Determine output file
         let output_path = args.output.clone().unwrap_or_else(|| get_default_output_path(&args.input));
 
-        // 3. Warn if JPG is specified (doesn't support transparency)
         if let Some(ext) = output_path.extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if ext_str == "jpg" || ext_str == "jpeg" {
@@ -59,10 +60,8 @@ impl CliCommandHandler {
             }
         }
 
-        // 4. Model type is always Full (single model architecture)
         let model_type = ModelType::Full;
 
-        // 5. Map arguments to L1 Taxonomy value object
         let options = RemovalOptions {
             input_path: args.input,
             output_path,
@@ -71,16 +70,9 @@ impl CliCommandHandler {
             force_download: args.force_download,
         };
 
-        // 6. Wrap in L3 Contract aggregate and execute
-        let io = RemovalTransferAggregate::new(options);
-        orchestrator.execute(&io.options)?;
+        let io = RemovalTransferVo::new(options);
+        BgRemoverAggregate::execute(orchestrator, &io.options)?;
 
         Ok(())
-    }
-}
-
-impl Default for CliCommandHandler {
-    fn default() -> Self {
-        Self::new()
     }
 }

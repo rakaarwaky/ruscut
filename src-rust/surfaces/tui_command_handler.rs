@@ -1,22 +1,24 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use colored::Colorize;
 use crate::agent::BgRemoverOrchestrator;
+use crate::contract::BgRemoverAggregate;
 use crate::taxonomy::removal_types_vo::{get_cache_dir, get_default_output_path, ModelType, RemovalOptions};
-use crate::contract::RemovalTransferAggregate;
+use crate::taxonomy::RemovalTransferVo;
 use dialoguer::{Confirm, Input, Select};
 
+#[derive(Default)]
 pub struct TuiCommandHandler {
-    _dummy: bool,
+    _initialized: bool,
 }
 
 impl TuiCommandHandler {
     pub fn new() -> Self {
-        Self { _dummy: true }
+        Self { _initialized: false }
     }
 
-    pub fn run(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
+    pub async fn run(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
         loop {
-            // Draw clean premium header card
             println!("\n{}", "╔══════════════════════════════════════════════════════════╗".blue().bold());
             println!("║  {}                                                    ║", "____                 _   ".cyan().bold());
             println!("║ {}                                                   ║", " |  _ \\ _   _ ___  ___| |_ ".cyan().bold());
@@ -43,7 +45,7 @@ impl TuiCommandHandler {
 
             match selection {
                 0 => {
-                    if let Err(err) = self.start_wizard(orchestrator) {
+                    if let Err(err) = self.start_wizard(orchestrator).await {
                         println!("\n{} Execution error: {:?}", "ERROR:".red().bold(), err);
                     }
                 }
@@ -66,10 +68,9 @@ impl TuiCommandHandler {
         Ok(())
     }
 
-    fn start_wizard(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
+    async fn start_wizard(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
         println!("\n{}", "--- BACKGROUND REMOVAL WIZARD ---".green().bold());
 
-        // 1. Get input path
         let input_path = loop {
             let path_str: String = Input::new()
                 .with_prompt("Enter input image path (e.g. image.jpg)")
@@ -85,7 +86,6 @@ impl TuiCommandHandler {
             );
         };
 
-        // 2. Get output path
         let output_str: String = Input::new()
             .with_prompt("Enter output save path (leave empty for default)")
             .allow_empty(true)
@@ -96,7 +96,6 @@ impl TuiCommandHandler {
             PathBuf::from(output_str.trim())
         };
 
-        // 3. Confirm force-download
         let force_download = Confirm::new()
             .with_prompt("Do you want to force re-download the AI model?")
             .default(false)
@@ -112,7 +111,6 @@ impl TuiCommandHandler {
             force_download,
         };
 
-        // Warn if JPG is specified
         if let Some(ext) = options.output_path.extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if ext_str == "jpg" || ext_str == "jpeg" {
@@ -123,9 +121,15 @@ impl TuiCommandHandler {
             }
         }
 
-        // 4. Wrap and execute
-        let io = RemovalTransferAggregate::new(options);
-        orchestrator.execute(&io.options)?;
+        let arc_orch: Arc<BgRemoverOrchestrator> = Arc::new(orchestrator.clone());
+        let io = RemovalTransferVo::new(options);
+        let opts = io.options;
+
+        tokio::task::spawn_blocking(move || {
+            BgRemoverAggregate::execute(&*arc_orch, &opts)
+        }).await
+            .map_err(|e| anyhow::anyhow!("Task join error: {:?}", e))?
+            .map_err(|e| anyhow::anyhow!("Background removal failed: {:?}", e))?;
 
         println!("\nPress Enter to return to the main menu...");
         let _: String = Input::new().allow_empty(true).interact_text()?;
@@ -135,7 +139,7 @@ impl TuiCommandHandler {
     fn show_settings(&self) {
         println!("\n{}", "--- SETTINGS & CONFIGURATIONS ---".magenta().bold());
         println!("  - Model Engine  : ONNX Runtime");
-        println!("  - Active Model  : BRIA RMBG-1.4 Full (176 MB)");
+        println!("  - Active Model  : BRIA RMBG-2.0 (1.02 GB)");
         println!("  - Cache Path    : {:?}", get_cache_dir());
         println!("  - Precision     : f32 (Full Precision)");
 
@@ -145,7 +149,7 @@ impl TuiCommandHandler {
 
     fn show_diagnostics(&self) {
         println!("\n{}", "--- SYSTEM DIAGNOSTICS ---".yellow().bold());
-        
+
         let cache_dir = get_cache_dir();
         let model_path = cache_dir.join(ModelType::Full.filename());
 
@@ -183,16 +187,10 @@ impl TuiCommandHandler {
         println!("  - Version      : 0.1.0");
         println!("  - License      : MIT License");
         println!("  - Repository   : https://github.com/rakaarwaky/ruscut");
-        println!("  - Core AI Model: BRIA RMBG-1.4 (ONNX Edition)");
+        println!("  - Core AI Model: BRIA RMBG-2.0 (ONNX Edition)");
         println!("  - Under Gated  : Subject to Bria AI Commercial guidelines");
 
         println!("\nPress Enter to return to the main menu...");
         let _ = Input::<String>::new().allow_empty(true).interact_text();
-    }
-}
-
-impl Default for TuiCommandHandler {
-    fn default() -> Self {
-        Self::new()
     }
 }
