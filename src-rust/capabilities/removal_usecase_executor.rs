@@ -151,35 +151,44 @@ impl RemovalUseCaseProtocol for RemovalUseCase {
     }
 
     fn usecase_run_benchmark(&self) -> anyhow::Result<BenchmarkReportVo> {
+        use std::time::Instant;
+
         let model_type = crate::taxonomy::removal_types_vo::ModelType::Full;
+
+        eprintln!("[benchmark] Ensuring model is cached...");
         let model_path = self
             .downloader
             .downloader_ensure_model(&model_type, false)?;
+        eprintln!("[benchmark] Model ready: {}", model_path.display());
 
-        let input_path = std::path::PathBuf::from("test/test_image.png");
+        // Use a real test image if available, otherwise generate a 1024x1024 mock
+        let input_path = std::path::PathBuf::from("tests/fixtures/test_image.png");
         let final_input_path = if input_path.exists() {
             input_path
         } else {
             let mock_path = std::env::temp_dir().join("ruscut_bench_mock.png");
             if !mock_path.exists() {
+                eprintln!("[benchmark] Generating 1024x1024 mock image...");
                 let img: image::RgbImage =
-                    image::ImageBuffer::from_pixel(1024, 1024, image::Rgb([255, 255, 255]));
+                    image::ImageBuffer::from_pixel(1024, 1024, image::Rgb([128, 180, 220]));
                 img.save(&mock_path)?;
             }
             mock_path
         };
 
-        use std::time::Instant;
-
         let active_engine_name = self.usecase_get_engine_name();
+        eprintln!("[benchmark] Engine: {}", active_engine_name.as_str());
 
-        let _ = self
-            .downloader
-            .downloader_ensure_model(&model_type, false)?;
-
-        let original_img = image::open(&final_input_path).context("Failed to open image")?;
+        let original_img =
+            image::open(&final_input_path).context("Failed to open benchmark image")?;
         let (original_width, original_height) = (original_img.width(), original_img.height());
+        eprintln!(
+            "[benchmark] Image: {}x{} px",
+            original_width, original_height
+        );
 
+        // Warmup pass — loads model into memory / warms up GPU driver
+        eprintln!("[benchmark] Warming up (1 pass)...");
         {
             let img_tensor = self.image_processor.processor_preprocess(&original_img)?;
             let model_vo = ModelPathVo::new(model_path.clone());
@@ -195,15 +204,17 @@ impl RemovalUseCaseProtocol for RemovalUseCase {
                 .image_processor
                 .processor_postprocess(&raw_output.data)?;
         }
+        eprintln!("[benchmark] Warmup done. Running 10 timed iterations...");
 
-        let iterations = 10;
+        let iterations: u32 = 10;
         let mut total_preprocess = std::time::Duration::default();
         let mut total_inference = std::time::Duration::default();
         let mut total_postprocess = std::time::Duration::default();
         let mut total_mask = std::time::Duration::default();
         let mut total_loop = std::time::Duration::default();
 
-        for _ in 0..iterations {
+        for i in 1..=iterations {
+            eprint!("[benchmark] iteration {}/{}...", i, iterations);
             let loop_start = Instant::now();
 
             let t_start = Instant::now();
@@ -248,7 +259,9 @@ impl RemovalUseCaseProtocol for RemovalUseCase {
 
             let iter_dur = loop_start.elapsed();
             total_loop += iter_dur;
+            eprintln!(" done ({:.0?})", iter_dur);
         }
+        eprintln!("[benchmark] All iterations complete.");
 
         let avg_preprocess = total_preprocess / iterations;
         let avg_inference = total_inference / iterations;
