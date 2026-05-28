@@ -1,126 +1,94 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# release.sh - Full Release Pipeline (2026 Standard)
+# Bumps version, generates changelog, commits, tags, and pushes.
+# GitHub Actions then builds binaries and uploads them to the release.
+#
+# Prerequisites: cargo install cargo-release
+# Optional:      cargo install git-cliff (for changelog generation)
+#
+# Usage (from any directory):
+#   ./scripts/release.sh [major|minor|patch|X.Y.Z] [--skip-publish]
 
-# Script to bump version, commit, push, and trigger GitHub Release
-# Usage: ./scripts/release.sh <major|minor|patch|x.y.z> ["optional custom commit message"]
+set -euo pipefail
 
-set -e
-
+# Always run from the project root (parent of this script's directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CARGO_TOML="$PROJECT_ROOT/Cargo.toml"
+cd "$PROJECT_ROOT"
 
-# Parse arguments to handle --skip-publish flag
-SKIP_PUBLISH=false
-ARGS=()
+BUMP_TYPE="${1:-patch}"
+
+# Validate prerequisites
+if ! command -v cargo-release >/dev/null 2>&1; then
+    echo "❌ 'cargo-release' not installed."
+    echo "   Install: cargo install cargo-release"
+    exit 1
+fi
+
+# Validate input
+if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch|alpha|beta|rc|[0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+    echo "❌ Invalid bump format: $BUMP_TYPE"
+    echo "   Usage: $0 <major|minor|patch|version>"
+    exit 1
+fi
+
+# Parse flags
+SKIP_PUSH=false
 for arg in "$@"; do
-    if [ "$arg" == "--skip-publish" ]; then
-        SKIP_PUBLISH=true
-    else
-        ARGS+=("$arg")
+    if [ "$arg" = "--skip-push" ]; then
+        SKIP_PUSH=true
     fi
 done
 
-BUMP_TYPE="${ARGS[0]}"
-CUSTOM_MSG="${ARGS[1]}"
+CURRENT=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+echo "🚀 Starting release pipeline: $CURRENT → ($BUMP_TYPE)"
+echo "   Working directory: $PROJECT_ROOT"
+echo ""
 
-if [ -z "$BUMP_TYPE" ]; then
-    echo "Usage: $0 <major|minor|patch|x.y.z> [\"optional commit message\"] [--skip-publish]"
-    exit 1
-fi
-
-if [ ! -f "$CARGO_TOML" ]; then
-    echo "Error: Cargo.toml not found at $CARGO_TOML"
-    exit 1
-fi
-
-# Extract current version
-CURRENT_VERSION=$(grep -m 1 '^version = ' "$CARGO_TOML" | cut -d '"' -f 2)
-
-if [ -z "$CURRENT_VERSION" ]; then
-    echo "Error: Could not determine current version from Cargo.toml"
-    exit 1
-fi
-
-IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-
-# Determine new version
-if [ "$BUMP_TYPE" == "major" ]; then
-    major=$((major + 1))
-    minor=0
-    patch=0
-    NEW_VERSION="${major}.${minor}.${patch}"
-elif [ "$BUMP_TYPE" == "minor" ]; then
-    minor=$((minor + 1))
-    patch=0
-    NEW_VERSION="${major}.${minor}.${patch}"
-elif [ "$BUMP_TYPE" == "patch" ]; then
-    patch=$((patch + 1))
-    NEW_VERSION="${major}.${minor}.${patch}"
+echo "📝 [1/3] Generating changelog from conventional commits..."
+if command -v git-cliff >/dev/null 2>&1; then
+    git-cliff --output CHANGELOG.md
+    git add CHANGELOG.md
+    git commit -m "docs: update changelog for release" 2>/dev/null || echo "  No changelog changes to commit."
 else
-    # Check if the provided version matches x.y.z format
-    if [[ ! "$BUMP_TYPE" =~ ^[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-        echo "Error: Invalid version format '$BUMP_TYPE'. Must be 'major', 'minor', 'patch', or a valid semantic version string."
-        exit 1
-    fi
-    NEW_VERSION="$BUMP_TYPE"
+    echo "  ⚠️  git-cliff not installed. Skipping changelog."
+    echo "  Install: cargo install git-cliff"
 fi
-
-echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION..."
-
-# Update version in Cargo.toml (only the first occurrence under [package])
-awk -v old="version = \"$CURRENT_VERSION\"" -v new="version = \"$NEW_VERSION\"" '
-    !done && $0 == old {
-        print new
-        done = 1
-        next
-    }
-    {print}
-' "$CARGO_TOML" > "${CARGO_TOML}.tmp" && mv "${CARGO_TOML}.tmp" "$CARGO_TOML"
-
-# Update Cargo.lock to reflect the new version
-echo "Updating Cargo.lock..."
-cd "$PROJECT_ROOT"
-cargo check > /dev/null 2>&1 || true
-
-# Commit and Push
-echo "Staging files..."
-git add .
-
-if [ -z "$CUSTOM_MSG" ]; then
-    COMMIT_MSG="chore: release v$NEW_VERSION"
-else
-    COMMIT_MSG="$CUSTOM_MSG"
-fi
-
-echo "Committing with message: '$COMMIT_MSG'..."
-git commit -m "$COMMIT_MSG"
-
-# Create tag locally (force recreate if it already exists to allow retries)
-echo "Creating tag v$NEW_VERSION..."
-if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
-    echo "⚠️ Tag v$NEW_VERSION already exists locally. Re-tagging..."
-    git tag -d "v$NEW_VERSION"
-fi
-git tag "v$NEW_VERSION"
-
-if [ "$SKIP_PUBLISH" = true ]; then
-    echo "⏭️ Skipping publication to crates.io..."
-else
-    echo "Publishing to crates.io..."
-    # We run cargo publish before pushing to GitHub.
-    # If it fails, we show a warning but DO NOT block the GitHub release pushing.
-    cargo publish || {
-        echo "⚠️ Failed to publish to crates.io (likely due to missing credentials/login or name issues)."
-        echo "Proceeding with code and tag pushing to GitHub..."
-    }
-fi
-
-echo "Pushing code to repository..."
-git push
-
-echo "Pushing tag to repository to trigger GitHub Actions release..."
-git push origin "v$NEW_VERSION" --force
 
 echo ""
-echo "✅ Successfully bumped version to $NEW_VERSION, published to crates.io, committed, pushed, and tagged!"
-echo "🚀 GitHub Actions (.github/workflows/release.yml) will now automatically build and publish the release."
+echo "🏷️  [2/3] Bumping version and tagging release ($BUMP_TYPE)..."
+# cargo-release: bumps Cargo.toml, commits, creates a git tag, and pushes.
+# --no-publish: ruscut distributes via GitHub Releases, not crates.io.
+if [ "$SKIP_PUSH" = true ]; then
+    if ! cargo release "$BUMP_TYPE" \
+        --execute \
+        --no-publish \
+        --no-push \
+        --no-confirm; then
+        echo ""
+        echo "❌ cargo-release failed. Run 'git status' and fix uncommitted changes."
+        exit 1
+    fi
+else
+    if ! cargo release "$BUMP_TYPE" \
+        --execute \
+        --no-publish \
+        --no-confirm; then
+        echo ""
+        echo "❌ cargo-release failed. Common causes:"
+        echo "   - Uncommitted changes in working tree (run: git status)"
+        echo "   - No git remote configured (run: git remote -v)"
+        echo "   - Push access denied"
+        exit 1
+    fi
+fi
+
+NEW_VERSION=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+echo ""
+echo "✅ [3/3] Release pipeline complete! v$NEW_VERSION"
+if [ "$SKIP_PUSH" = true ]; then
+    echo "   Bump committed locally. Push manually when ready."
+else
+    echo "   Tag v$NEW_VERSION pushed → GitHub Actions will build binaries."
+    echo "   Monitor: https://github.com/rakaarwaky/ruscut/actions"
+fi

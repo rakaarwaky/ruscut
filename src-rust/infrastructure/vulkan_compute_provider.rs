@@ -1,8 +1,8 @@
-use ash::{vk, Device, Entry, Instance};
-use std::ffi::CString;
-use anyhow::anyhow;
 use crate::contract::VulkanComputePort;
 use crate::taxonomy::TensorDataVo;
+use anyhow::anyhow;
+use ash::{Device, Entry, Instance, vk};
+use std::ffi::CString;
 
 /// Custom Vulkan Compute Engine designed to run tensor operations directly on GPU.
 pub struct VulkanComputeEngine {
@@ -32,8 +32,7 @@ impl VulkanComputeEngine {
             .engine_version(vk::make_api_version(0, 1, 0, 0))
             .api_version(vk::API_VERSION_1_3);
 
-        let instance_create_info = vk::InstanceCreateInfo::default()
-            .application_info(&app_info);
+        let instance_create_info = vk::InstanceCreateInfo::default().application_info(&app_info);
 
         let instance = unsafe { entry.create_instance(&instance_create_info, None) }
             .map_err(|e| anyhow!("Failed to create Vulkan instance: {:?}", e))?;
@@ -58,7 +57,8 @@ impl VulkanComputeEngine {
             };
 
             // Find a queue family that supports compute operations
-            let queue_families = unsafe { instance.get_physical_device_queue_family_properties(phys_device) };
+            let queue_families =
+                unsafe { instance.get_physical_device_queue_family_properties(phys_device) };
             let mut compute_family_idx = None;
 
             for (idx, family) in queue_families.iter().enumerate() {
@@ -70,11 +70,9 @@ impl VulkanComputeEngine {
 
             if let Some(queue_idx) = compute_family_idx {
                 // Highly prioritize AMD GPUs (particularly RX 6800 XT)
-                let is_amd = device_name.to_lowercase().contains("amd") 
+                let is_amd = device_name.to_lowercase().contains("amd")
                     || device_name.to_lowercase().contains("radeon")
                     || props.vendor_id == 0x1002;
-
-
 
                 if is_amd {
                     selected_gpu = Some((phys_device, device_name));
@@ -88,12 +86,10 @@ impl VulkanComputeEngine {
             }
         }
 
-        let (physical_device, _device_name) = selected_gpu
-            .ok_or(anyhow!("No GPU found supporting compute operations!"))?;
-        let queue_family_index = selected_queue_family
-            .ok_or(anyhow!("No compute queue family found!"))?;
-
-
+        let (physical_device, _device_name) =
+            selected_gpu.ok_or(anyhow!("No GPU found supporting compute operations!"))?;
+        let queue_family_index =
+            selected_queue_family.ok_or(anyhow!("No compute queue family found!"))?;
 
         // Create logical device
         let priorities = [1.0];
@@ -101,8 +97,8 @@ impl VulkanComputeEngine {
             .queue_family_index(queue_family_index)
             .queue_priorities(&priorities);
 
-        let device_create_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(std::slice::from_ref(&queue_info));
+        let device_create_info =
+            vk::DeviceCreateInfo::default().queue_create_infos(std::slice::from_ref(&queue_info));
 
         let device = unsafe { instance.create_device(physical_device, &device_create_info, None) }
             .map_err(|e| anyhow!("Failed to create Vulkan logical device: {:?}", e))?;
@@ -141,7 +137,8 @@ impl VulkanComputeEngine {
             self.vulkan_create_buffer(
                 size,
                 ash::vk::BufferUsageFlags::STORAGE_BUFFER,
-                ash::vk::MemoryPropertyFlags::HOST_VISIBLE | ash::vk::MemoryPropertyFlags::HOST_COHERENT,
+                ash::vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | ash::vk::MemoryPropertyFlags::HOST_COHERENT,
             )
         }
     }
@@ -164,33 +161,42 @@ impl VulkanComputePort for VulkanComputeEngine {
                 .usage(usage)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-            let buffer = self.device.create_buffer(&buffer_info, None)
+            let buffer = self
+                .device
+                .create_buffer(&buffer_info, None)
                 .map_err(|e| anyhow!("Failed to create buffer: {:?}", e))?;
 
             let mem_requirements = self.device.get_buffer_memory_requirements(buffer);
-            let mem_props = self.instance.get_physical_device_memory_properties(self.physical_device);
+            let mem_props = self
+                .instance
+                .get_physical_device_memory_properties(self.physical_device);
 
             let mut memory_type_index = None;
             for i in 0..mem_props.memory_type_count {
                 if (mem_requirements.memory_type_bits & (1 << i)) != 0
-                    && mem_props.memory_types[i as usize].property_flags.contains(memory_properties)
+                    && mem_props.memory_types[i as usize]
+                        .property_flags
+                        .contains(memory_properties)
                 {
                     memory_type_index = Some(i);
                     break;
                 }
             }
 
-            let memory_type_index = memory_type_index
-                .ok_or(anyhow!("Failed to find suitable Vulkan memory type!"))?;
+            let memory_type_index =
+                memory_type_index.ok_or(anyhow!("Failed to find suitable Vulkan memory type!"))?;
 
             let alloc_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(mem_requirements.size)
                 .memory_type_index(memory_type_index);
 
-            let memory = self.device.allocate_memory(&alloc_info, None)
+            let memory = self
+                .device
+                .allocate_memory(&alloc_info, None)
                 .map_err(|e| anyhow!("Failed to allocate device memory: {:?}", e))?;
 
-            self.device.bind_buffer_memory(buffer, memory, 0)
+            self.device
+                .bind_buffer_memory(buffer, memory, 0)
                 .map_err(|e| anyhow!("Failed to bind buffer memory: {:?}", e))?;
 
             Ok((buffer, memory))
@@ -208,9 +214,10 @@ impl VulkanComputePort for VulkanComputeEngine {
     ) -> anyhow::Result<()> {
         unsafe {
             // Create shader module
-            let shader_info = vk::ShaderModuleCreateInfo::default()
-                .code(shader_code);
-            let shader_module = self.device.create_shader_module(&shader_info, None)
+            let shader_info = vk::ShaderModuleCreateInfo::default().code(shader_code);
+            let shader_module = self
+                .device
+                .create_shader_module(&shader_info, None)
                 .map_err(|e| anyhow!("Failed to create compute shader module: {:?}", e))?;
 
             // Descriptor Set Layout definition
@@ -225,15 +232,18 @@ impl VulkanComputePort for VulkanComputeEngine {
                 );
             }
 
-            let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
-                .bindings(&bindings);
-            let descriptor_layout = self.device.create_descriptor_set_layout(&layout_info, None)
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings);
+            let descriptor_layout = self
+                .device
+                .create_descriptor_set_layout(&layout_info, None)
                 .map_err(|e| anyhow!("Failed to create descriptor set layout: {:?}", e))?;
 
             // Pipeline Layout definition
             let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
                 .set_layouts(std::slice::from_ref(&descriptor_layout));
-            let pipeline_layout = self.device.create_pipeline_layout(&pipeline_layout_info, None)
+            let pipeline_layout = self
+                .device
+                .create_pipeline_layout(&pipeline_layout_info, None)
                 .map_err(|e| anyhow!("Failed to create pipeline layout: {:?}", e))?;
 
             // Create Compute Pipeline
@@ -247,7 +257,13 @@ impl VulkanComputePort for VulkanComputeEngine {
                 .stage(stage_info)
                 .layout(pipeline_layout);
 
-            let pipelines = self.device.create_compute_pipelines(vk::PipelineCache::null(), std::slice::from_ref(&pipeline_info), None)
+            let pipelines = self
+                .device
+                .create_compute_pipelines(
+                    vk::PipelineCache::null(),
+                    std::slice::from_ref(&pipeline_info),
+                    None,
+                )
                 .map_err(|(_, e)| anyhow!("Failed to create compute pipeline: {:?}", e))?;
             let pipeline = pipelines[0];
 
@@ -260,14 +276,18 @@ impl VulkanComputePort for VulkanComputeEngine {
                 .max_sets(1)
                 .pool_sizes(std::slice::from_ref(&pool_size));
 
-            let descriptor_pool = self.device.create_descriptor_pool(&pool_info, None)
+            let descriptor_pool = self
+                .device
+                .create_descriptor_pool(&pool_info, None)
                 .map_err(|e| anyhow!("Failed to create descriptor pool: {:?}", e))?;
 
             let alloc_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(descriptor_pool)
                 .set_layouts(std::slice::from_ref(&descriptor_layout));
 
-            let descriptor_sets = self.device.allocate_descriptor_sets(&alloc_info)
+            let descriptor_sets = self
+                .device
+                .allocate_descriptor_sets(&alloc_info)
                 .map_err(|e| anyhow!("Failed to allocate descriptor sets: {:?}", e))?;
             let descriptor_set = descriptor_sets[0];
 
@@ -302,17 +322,21 @@ impl VulkanComputePort for VulkanComputeEngine {
                 .level(vk::CommandBufferLevel::PRIMARY)
                 .command_buffer_count(1);
 
-            let command_buffers = self.device.allocate_command_buffers(&cmd_alloc_info)
+            let command_buffers = self
+                .device
+                .allocate_command_buffers(&cmd_alloc_info)
                 .map_err(|e| anyhow!("Failed to allocate command buffers: {:?}", e))?;
             let cmd_buf = command_buffers[0];
 
             let begin_info = vk::CommandBufferBeginInfo::default()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
-            self.device.begin_command_buffer(cmd_buf, &begin_info)
+            self.device
+                .begin_command_buffer(cmd_buf, &begin_info)
                 .map_err(|e| anyhow!("Failed to begin recording command buffer: {:?}", e))?;
 
-            self.device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline);
+            self.device
+                .cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline);
             self.device.cmd_bind_descriptor_sets(
                 cmd_buf,
                 vk::PipelineBindPoint::COMPUTE,
@@ -324,21 +348,30 @@ impl VulkanComputePort for VulkanComputeEngine {
 
             self.device.cmd_dispatch(cmd_buf, grid_x, grid_y, grid_z);
 
-            self.device.end_command_buffer(cmd_buf)
+            self.device
+                .end_command_buffer(cmd_buf)
                 .map_err(|e| anyhow!("Failed to record command buffer: {:?}", e))?;
 
             // Submit to Compute Queue and Wait
             let fence_info = vk::FenceCreateInfo::default();
-            let fence = self.device.create_fence(&fence_info, None)
+            let fence = self
+                .device
+                .create_fence(&fence_info, None)
                 .map_err(|e| anyhow!("Failed to create execution fence: {:?}", e))?;
 
-            let submit_info = vk::SubmitInfo::default()
-                .command_buffers(std::slice::from_ref(&cmd_buf));
+            let submit_info =
+                vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd_buf));
 
-            self.device.queue_submit(self.compute_queue, std::slice::from_ref(&submit_info), fence)
+            self.device
+                .queue_submit(
+                    self.compute_queue,
+                    std::slice::from_ref(&submit_info),
+                    fence,
+                )
                 .map_err(|e| anyhow!("Failed to submit compute command: {:?}", e))?;
 
-            self.device.wait_for_fences(std::slice::from_ref(&fence), true, u64::MAX)
+            self.device
+                .wait_for_fences(std::slice::from_ref(&fence), true, u64::MAX)
                 .map_err(|e| anyhow!("Failed waiting for compute execution to finish: {:?}", e))?;
 
             // Cleanup temporary compute pipeline resources
@@ -346,9 +379,11 @@ impl VulkanComputePort for VulkanComputeEngine {
             self.device.destroy_descriptor_pool(descriptor_pool, None);
             self.device.destroy_pipeline(pipeline, None);
             self.device.destroy_pipeline_layout(pipeline_layout, None);
-            self.device.destroy_descriptor_set_layout(descriptor_layout, None);
+            self.device
+                .destroy_descriptor_set_layout(descriptor_layout, None);
             self.device.destroy_shader_module(shader_module, None);
-            self.device.free_command_buffers(self.command_pool, &[cmd_buf]);
+            self.device
+                .free_command_buffers(self.command_pool, &[cmd_buf]);
 
             Ok(())
         }

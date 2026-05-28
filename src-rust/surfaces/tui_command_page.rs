@@ -1,21 +1,18 @@
-use std::panic;
-use std::io;
 use crate::agent::BgRemoverOrchestrator;
 use crate::contract::BgRemoverAggregate;
-use crate::taxonomy::removal_types_vo::{get_default_output_path, ModelType, RemovalOptions};
+use crate::taxonomy::removal_types_vo::{ModelType, RemovalOptions, get_default_output_path};
+use std::io;
+use std::panic;
 
 use super::tui_state_store::{AppStateStore, JobStatus};
 use super::tui_view_controller::TuiViewController;
 
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 pub struct TuiCommandPage {
     _initialized: bool,
@@ -23,7 +20,9 @@ pub struct TuiCommandPage {
 
 impl TuiCommandPage {
     pub fn new() -> Self {
-        Self { _initialized: false }
+        Self {
+            _initialized: false,
+        }
     }
 
     pub async fn run(&self, orchestrator: &BgRemoverOrchestrator) -> anyhow::Result<()> {
@@ -90,12 +89,18 @@ impl TuiCommandPage {
                         match key.code {
                             KeyCode::Char('q') => break,
                             KeyCode::Up => {
-                                if let Some(selected) = app_state.list_state.selected().filter(|&s| s > 0) {
+                                if let Some(selected) =
+                                    app_state.list_state.selected().filter(|&s| s > 0)
+                                {
                                     app_state.list_state.select(Some(selected - 1));
                                 }
                             }
                             KeyCode::Down => {
-                                if let Some(selected) = app_state.list_state.selected().filter(|&s| s + 1 < app_state.items.len()) {
+                                if let Some(selected) = app_state
+                                    .list_state
+                                    .selected()
+                                    .filter(|&s| s + 1 < app_state.items.len())
+                                {
                                     app_state.list_state.select(Some(selected + 1));
                                 }
                             }
@@ -106,13 +111,20 @@ impl TuiCommandPage {
                                 app_state.force_download = !app_state.force_download;
                             }
                             KeyCode::Enter => {
-                                if let Some(selected) = app_state.list_state.selected().filter(|&s| s < app_state.items.len()) {
+                                if let Some(selected) = app_state
+                                    .list_state
+                                    .selected()
+                                    .filter(|&s| s < app_state.items.len())
+                                {
                                     let (_, path, is_dir) = &app_state.items[selected];
                                     if *is_dir {
                                         app_state.current_dir = path.clone();
                                         app_state.reload_files();
-                                    } else if app_state.job_status == JobStatus::Idle 
-                                        || matches!(app_state.job_status, JobStatus::Success(_) | JobStatus::Failed(_)) 
+                                    } else if app_state.job_status == JobStatus::Idle
+                                        || matches!(
+                                            app_state.job_status,
+                                            JobStatus::Success(_) | JobStatus::Failed(_)
+                                        )
                                     {
                                         // Start async background removal job using the clean contract API
                                         let orch = orchestrator.clone();
@@ -128,7 +140,7 @@ impl TuiCommandPage {
 
                                         std::thread::spawn(move || {
                                             let _ = job_tx.send(JobStatus::LoadingModel);
-                                            
+
                                             let options = RemovalOptions {
                                                 input_path,
                                                 output_path,
@@ -138,13 +150,18 @@ impl TuiCommandPage {
                                             };
 
                                             let _ = job_tx.send(JobStatus::RemovingBackground);
-                                            match BgRemoverAggregate::aggregate_execute(&orch, &options) {
+                                            match BgRemoverAggregate::aggregate_execute(
+                                                &orch, &options,
+                                            ) {
                                                 Ok(_) => {
                                                     let _ = job_tx.send(JobStatus::SavingOutput);
-                                                    let _ = job_tx.send(JobStatus::Success(options.output_path));
+                                                    let _ = job_tx.send(JobStatus::Success(
+                                                        options.output_path,
+                                                    ));
                                                 }
                                                 Err(e) => {
-                                                    let _ = job_tx.send(JobStatus::Failed(e.to_string()));
+                                                    let _ = job_tx
+                                                        .send(JobStatus::Failed(e.to_string()));
                                                 }
                                             }
                                         });

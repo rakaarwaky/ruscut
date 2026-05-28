@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use crate::contract::{RemovalUseCaseProtocol, BgRemoverAggregate};
+use crate::contract::{BgRemoverAggregate, RemovalUseCaseProtocol};
 use crate::taxonomy::{BenchmarkReportVo, EngineNameVo, RemovalOptions};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct BgRemoverOrchestrator {

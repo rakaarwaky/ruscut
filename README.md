@@ -57,21 +57,34 @@ Before installation, ensure your system meets the following requirements:
 
 ## Installation
 
-### Option 1: Quick Installer Script (Recommended — Linux/macOS)
+### Option 1: Automated Installer (Recommended — Linux/macOS)
 
-Automatically checks dependencies, compiles both binaries in release mode, and places them in your local PATH:
+Downloads the latest pre-built binaries from GitHub Releases, verifies SHA-256 checksums, and installs to `~/.cargo/bin`:
 
 ```bash
-./install.sh
+# Install latest release
+./scripts/install.sh
+
+# Install a specific version
+./scripts/install.sh --version=0.1.4
+
+# Show help
+./scripts/install.sh --help
 ```
 
 This installs **both** `ruscut` (CLI) and `ruscut-tui` (Interactive TUI).
 
-### Option 2: Cargo Install from crates.io
+Requirements: `curl`, `jq`
+
+### Option 2: Build from Source (Development)
+
+Runs format and clippy quality gates, then compiles and installs both binaries:
 
 ```bash
-cargo install ruscut
+./scripts/dev.sh
 ```
+
+Requirements: Rust toolchain (`cargo`, `rustfmt`, `clippy`)
 
 ### Option 3: Download Pre-built Binary (No Rust Required)
 
@@ -84,6 +97,8 @@ Download the latest release binary for your platform from the [GitHub Releases](
 | macOS Intel | `ruscut-macos-x86_64` | `ruscut-tui-macos-x86_64` |
 | macOS Apple Silicon | `ruscut-macos-arm64` | `ruscut-tui-macos-arm64` |
 | Windows x64 | `ruscut-windows-x86_64.exe` | `ruscut-tui-windows-x86_64.exe` |
+
+Each release includes a `checksums.txt` with SHA-256 hashes for supply-chain verification.
 
 ### Option 4: Manual Compilation
 
@@ -140,6 +155,49 @@ Options:
   -f, --force-download      Force re-download the model from Hugging Face
   -h, --help                Print help
   -V, --version             Print version
+```
+
+---
+
+## Developer Workflow
+
+All developer scripts live in `scripts/` and require a bash shell.
+
+| Script | Purpose | Prerequisites |
+|---|---|---|
+| `scripts/dev.sh` | Quality gates (fmt + clippy) then build & install locally | Rust toolchain |
+| `scripts/bump.sh` | Bump version locally — no push, no tag, no publish | `cargo-release` |
+| `scripts/release.sh` | Full release: changelog → bump → tag → push (triggers CI) | `cargo-release`, optional: `git-cliff` |
+| `scripts/install.sh` | Download & install pre-built binaries from GitHub Releases | `curl`, `jq` |
+
+### Typical development cycle
+
+```bash
+# 1. Make changes, then build and install locally
+./scripts/dev.sh
+
+# 2. Test the install
+ruscut --help
+
+# 3. Bump version locally (no push) to preview what the release will look like
+./scripts/bump.sh patch    # 0.1.4 → 0.1.5
+
+# 4. When ready to release — this creates a tag and pushes, triggering GitHub Actions
+./scripts/release.sh patch
+```
+
+### Installing prerequisites
+
+```bash
+# cargo-release (required for bump.sh and release.sh)
+cargo install cargo-release
+
+# git-cliff (optional — generates CHANGELOG.md in release.sh)
+cargo install git-cliff
+
+# jq (required for install.sh)
+sudo apt install jq   # Linux
+brew install jq       # macOS
 ```
 
 ---

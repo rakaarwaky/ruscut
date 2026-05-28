@@ -1,265 +1,169 @@
-#!/bin/bash
-# ruscut - Installer
-# Cross-platform installation script for Linux and macOS.
-# Supports local build (default) or remote install from GitHub releases.
+#!/usr/bin/env bash
+# install.sh - Secure Installer (2026 Standard)
+# Install ruscut from GitHub Releases with SHA256 verification.
+# For local development build, use dev.sh instead.
 
-set -e
+set -euo pipefail
 
-# Terminal colors
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 REPO="rakaarwaky/ruscut"
+INSTALL_DIR="${CARGO_HOME:-$HOME/.cargo}/bin"
+mkdir -p "$INSTALL_DIR"
 
 # Parse arguments
-REMOTE_MODE=false
-REMOTE_VERSION=""
+VERSION=""
 for arg in "$@"; do
     case "$arg" in
-        --remote|-r)
-            REMOTE_MODE=true
-            ;;
-        --remote=*|-r=*)
-            REMOTE_MODE=true
-            REMOTE_VERSION="${arg#*=}"
-            ;;
         --help|-h)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: $0 [--version=X]"
+            echo ""
+            echo "Install ruscut from GitHub Releases."
+            echo "For local build: ./scripts/dev.sh"
             echo ""
             echo "Options:"
-            echo "  (no args)        Install from local source (release build)"
-            echo "  --remote, -r     Install latest release from GitHub"
-            echo "  --remote=X, -r=X Install specific version from GitHub (e.g. -r=0.1.3)"
-            echo "  --help, -h       Show this help"
+            echo "  --version=X, -v=X  Install specific version (e.g. -v=0.1.3)"
+            echo "  --help, -h         Show this help"
             exit 0
+            ;;
+        --version=*|-v=*)
+            VERSION="${arg#*=}"
             ;;
     esac
 done
 
-# Clear screen and show header
-clear || true
-echo -e "${BOLD}${BLUE}"
-echo "=========================================================="
-echo "    ____                         __                       "
-echo "   / __ \__  ________________ __/ /_                      "
-echo "  / /_/ / / / / ___/ ___/ __ \`/ __/                      "
-echo " / _, _/ /_/ (__  ) /__/ /_/ / /_                        "
-echo "/_/ |_|\__,_/____/\___/\__,_/\__/                        "
-echo "                                                          "
-echo "=========================================================="
-echo "    AI-powered Background Remover CLI + TUI in Rust"
-echo -e "${NC}"
+# Prerequisite check
+if ! command -v curl >/dev/null 2>&1; then
+    echo "❌ 'curl' is required. Install it first."
+    exit 1
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "❌ 'jq' is required. Install: sudo apt install jq"
+    exit 1
+fi
 
-# Determine install directory
-LOCAL_BIN="$HOME/.local/bin"
-CARGO_BIN="$HOME/.cargo/bin"
-INSTALL_DIR=""
+echo "🔍 Fetching release data from GitHub..."
+API_URL="https://api.github.com/repos/$REPO/releases"
 
-if [ -d "$CARGO_BIN" ]; then
-    INSTALL_DIR="$CARGO_BIN"
-elif [ -d "$LOCAL_BIN" ]; then
-    INSTALL_DIR="$LOCAL_BIN"
+if [ -n "$VERSION" ]; then
+    RELEASE_JSON=$(curl -sSf "${API_URL}/tags/v${VERSION}" 2>/dev/null \
+        || curl -sSf "${API_URL}/tags/${VERSION}" 2>/dev/null \
+        || true)
 else
-    mkdir -p "$LOCAL_BIN"
-    INSTALL_DIR="$LOCAL_BIN"
+    RELEASE_JSON=$(curl -sSf "${API_URL}/latest" 2>/dev/null || true)
 fi
 
-# ============================================================
-# REMOTE MODE: Download from GitHub Releases
-# ============================================================
-if [ "$REMOTE_MODE" = true ]; then
-    echo -e "${BOLD}[1/3] Downloading from GitHub Releases...${NC}"
-
-    # Detect version
-    if [ -z "$REMOTE_VERSION" ]; then
-        echo -e "  ${BLUE}Fetching latest release version...${NC}"
-        REMOTE_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | cut -d '"' -f 4 | sed 's/^v//')
-        if [ -z "$REMOTE_VERSION" ]; then
-            echo -e "${RED}ERROR: Could not fetch latest release version.${NC}"
-            echo "  Check: https://github.com/$REPO/releases"
-            exit 1
-        fi
-    fi
-    echo -e "  ${GREEN}Target version: v$REMOTE_VERSION${NC}"
-
-    # Detect OS and architecture
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-
-    case "$OS" in
-        linux)  OS_NAME="linux" ;;
-        darwin) OS_NAME="macos" ;;
-        *)      echo -e "${RED}ERROR: Unsupported OS: $OS${NC}"; exit 1 ;;
-    esac
-
-    case "$ARCH" in
-        x86_64)  ARCH_NAME="x86_64" ;;
-        aarch64|arm64) ARCH_NAME="aarch64" ;;
-        *)       echo -e "${RED}ERROR: Unsupported architecture: $ARCH${NC}"; exit 1 ;;
-    esac
-
-    ASSET_NAME="ruscut-${OS_NAME}-${ARCH_NAME}.tar.gz"
-    DOWNLOAD_URL="https://github.com/$REPO/releases/download/v${REMOTE_VERSION}/${ASSET_NAME}"
-
-    echo -e "  ${BLUE}Downloading: $ASSET_NAME${NC}"
-    TMP_DIR=$(mktemp -d)
-    curl -sL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET_NAME"
-
-    if [ ! -f "$TMP_DIR/$ASSET_NAME" ] || [ ! -s "$TMP_DIR/$ASSET_NAME" ]; then
-        echo -e "${RED}ERROR: Download failed. Asset may not exist for this platform.${NC}"
-        echo "  URL: $DOWNLOAD_URL"
-        echo "  Check: https://github.com/$REPO/releases/tag/v${REMOTE_VERSION}"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-
-    echo -e "  ${GREEN}Download complete.${NC}"
-    echo -e "\n${BOLD}[2/3] Extracting binaries...${NC}"
-    tar -xzf "$TMP_DIR/$ASSET_NAME" -C "$TMP_DIR"
-
-    # Install binaries
-    echo -e "\n${BOLD}[3/3] Installing binaries...${NC}"
-    if [ -f "$TMP_DIR/ruscut" ]; then
-        cp "$TMP_DIR/ruscut" "$INSTALL_DIR/ruscut"
-        chmod +x "$INSTALL_DIR/ruscut"
-        echo -e "  ${GREEN}Installed:  ruscut     -> $INSTALL_DIR/ruscut${NC}"
-    fi
-    if [ -f "$TMP_DIR/ruscut-tui" ]; then
-        cp "$TMP_DIR/ruscut-tui" "$INSTALL_DIR/ruscut-tui"
-        chmod +x "$INSTALL_DIR/ruscut-tui"
-        echo -e "  ${GREEN}Installed:  ruscut-tui -> $INSTALL_DIR/ruscut-tui${NC}"
-    fi
-
-    rm -rf "$TMP_DIR"
-
-    echo -e "\n=========================================================="
-    echo -e "  ${GREEN}Remote installation complete! v$REMOTE_VERSION${NC}"
-    echo -e "=========================================================="
-    exit 0
-fi
-
-# ============================================================
-# LOCAL MODE: Build from source
-# ============================================================
-
-# 1. Check for Rust and Cargo
-echo -e "${BOLD}[1/4] Checking dependencies...${NC}"
-if ! command -v cargo &>/dev/null; then
-    echo -e "${YELLOW}Warning: Rust and Cargo are not installed!${NC}"
-    echo "Rust is required to build and install ruscut."
-    echo "Would you like to install Rustup now? (y/n)"
-    read -r response
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        echo -e "${BLUE}Running rustup installer...${NC}"
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
+if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q '"message".*"Not Found"'; then
+    echo "❌ Could not fetch release data."
+    if [ -n "$VERSION" ]; then
+        echo "   Release v$VERSION not found at: https://github.com/$REPO/releases"
     else
-        echo -e "${RED}Installation cancelled. Please install Rust from https://rustup.rs/ and try again.${NC}"
+        echo "   No releases published yet at: https://github.com/$REPO/releases"
+        echo "   Use the local build instead: ./scripts/dev.sh"
+    fi
+    exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name' | sed 's/^v//')
+    if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+        echo "❌ Failed to parse version from release data."
         exit 1
     fi
-else
-    echo -e "  ${GREEN}Found Rust: $(cargo --version)${NC}"
 fi
 
-# Check for FFmpeg (required for video support)
-if ! command -v ffmpeg &>/dev/null; then
-    echo -e "  ${YELLOW}Warning: FFmpeg is not installed on your system!${NC}"
-    echo "  FFmpeg is required to process video files (MP4, MOV, WebM, GIF, etc.)."
-    echo "  (Note: Image processing will still work without FFmpeg.)"
-    echo ""
+echo "  ✅ Target version: v$VERSION"
 
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if command -v apt-get &>/dev/null; then
-            echo -n "  Would you like to install FFmpeg now via 'apt'? (y/n): "
-            read -r ffmpeg_response
-            if [[ "$ffmpeg_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-                echo -e "${BLUE}Running: sudo apt-get update && sudo apt-get install -y ffmpeg...${NC}"
-                sudo apt-get update && sudo apt-get install -y ffmpeg
-            fi
+# Detect OS and Architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64)  ARCH="x86_64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+case "$OS" in
+    linux)  OS="linux" ;;
+    darwin) OS="macos" ;;
+    *) echo "❌ Unsupported OS: $OS"; exit 1 ;;
+esac
+
+# Asset names match release.yml output (individual flat binaries, no tar.gz)
+ASSET_CLI="ruscut-${OS}-${ARCH}"
+ASSET_TUI="ruscut-tui-${OS}-${ARCH}"
+CHECKSUM_ASSET="checksums.txt"
+
+ASSET_CLI_URL=$(echo "$RELEASE_JSON" | jq -r --arg A "$ASSET_CLI" \
+    '.assets[] | select(.name == $A) | .browser_download_url')
+ASSET_TUI_URL=$(echo "$RELEASE_JSON" | jq -r --arg A "$ASSET_TUI" \
+    '.assets[] | select(.name == $A) | .browser_download_url')
+CHECKSUM_URL=$(echo "$RELEASE_JSON" | jq -r --arg A "$CHECKSUM_ASSET" \
+    '.assets[] | select(.name == $A) | .browser_download_url')
+
+if [ -z "$ASSET_CLI_URL" ] || [ "$ASSET_CLI_URL" = "null" ]; then
+    echo "❌ Asset '$ASSET_CLI' not found in release v$VERSION"
+    echo "   Check: https://github.com/$REPO/releases/tag/v$VERSION"
+    exit 1
+fi
+
+# Download with trap cleanup
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo ""
+echo "⬇️  Downloading $ASSET_CLI..."
+curl -sSfL "$ASSET_CLI_URL" -o "$TMP_DIR/$ASSET_CLI"
+
+echo "⬇️  Downloading $ASSET_TUI..."
+if [ -n "$ASSET_TUI_URL" ] && [ "$ASSET_TUI_URL" != "null" ]; then
+    curl -sSfL "$ASSET_TUI_URL" -o "$TMP_DIR/$ASSET_TUI"
+else
+    echo "  ⚠️  TUI binary not found in release. Skipping."
+fi
+
+# Supply Chain Security: SHA256 verification
+if [ -n "$CHECKSUM_URL" ] && [ "$CHECKSUM_URL" != "null" ]; then
+    echo ""
+    echo "🔒 Verifying SHA256 checksums..."
+    curl -sSfL "$CHECKSUM_URL" -o "$TMP_DIR/checksums.txt"
+
+    cd "$TMP_DIR"
+    if command -v sha256sum >/dev/null 2>&1; then
+        grep "$ASSET_CLI" checksums.txt | sha256sum -c - >/dev/null && echo "  ✅ $ASSET_CLI checksum OK"
+        if [ -f "$ASSET_TUI" ]; then
+            grep "$ASSET_TUI" checksums.txt | sha256sum -c - >/dev/null && echo "  ✅ $ASSET_TUI checksum OK"
         fi
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        if command -v brew &>/dev/null; then
-            echo -n "  Would you like to install FFmpeg now via Homebrew? (y/n): "
-            read -r ffmpeg_response
-            if [[ "$ffmpeg_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-                echo -e "${BLUE}Running: brew install ffmpeg...${NC}"
-                brew install ffmpeg
-            fi
+    elif command -v shasum >/dev/null 2>&1; then
+        grep "$ASSET_CLI" checksums.txt | shasum -a 256 -c - >/dev/null && echo "  ✅ $ASSET_CLI checksum OK"
+        if [ -f "$ASSET_TUI" ]; then
+            grep "$ASSET_TUI" checksums.txt | shasum -a 256 -c - >/dev/null && echo "  ✅ $ASSET_TUI checksum OK"
         fi
+    else
+        echo "  ⚠️  No sha256sum/shasum found. Verification skipped."
     fi
+    cd - >/dev/null
 else
-    FFMPEG_VER=$(ffmpeg -version | head -n 1)
-    echo -e "  ${GREEN}Found FFmpeg: $FFMPEG_VER${NC}"
+    echo "  ⚠️  Checksum file not found in release. Continuing without verification."
 fi
 
-# 2. Build ALL binaries in release mode
-echo -e "\n${BOLD}[2/4] Compiling all binaries in Release mode...${NC}"
-echo -e "${BLUE}Compiling ruscut (CLI) and ruscut-tui (Interactive). Please wait...${NC}"
-cargo build --release
-
-# Verify both binaries were produced
-if [ ! -f "target/release/ruscut" ]; then
-    echo -e "${RED}ERROR: ruscut binary was not produced. Build may have failed.${NC}"
-    exit 1
-fi
-if [ ! -f "target/release/ruscut-tui" ]; then
-    echo -e "${RED}ERROR: ruscut-tui binary was not produced. Build may have failed.${NC}"
-    exit 1
-fi
-echo -e "  ${GREEN}Build complete: ruscut and ruscut-tui produced.${NC}"
-
-# 3. Install binaries
-echo -e "\n${BOLD}[3/4] Installing binaries...${NC}"
-
-cp target/release/ruscut "$INSTALL_DIR/ruscut"
-echo -e "  ${GREEN}Installed:  ruscut     -> $INSTALL_DIR/ruscut${NC}"
-
-cp target/release/ruscut-tui "$INSTALL_DIR/ruscut-tui"
-echo -e "  ${GREEN}Installed:  ruscut-tui -> $INSTALL_DIR/ruscut-tui${NC}"
-
-# 4. Verify PATH
-echo -e "\n${BOLD}[4/4] Verifying installation PATH...${NC}"
-CLI_OK=false
-TUI_OK=false
-
-if command -v ruscut &>/dev/null; then
-    echo -e "  ${GREEN}OK: 'ruscut'     is ready in your PATH.${NC}"
-    CLI_OK=true
-fi
-if command -v ruscut-tui &>/dev/null; then
-    echo -e "  ${GREEN}OK: 'ruscut-tui' is ready in your PATH.${NC}"
-    TUI_OK=true
-fi
-
-if [ "$CLI_OK" = false ] || [ "$TUI_OK" = false ]; then
-    echo -e "\n  ${YELLOW}Notice: $INSTALL_DIR is not in your system PATH.${NC}"
-    echo "  To run the binaries from anywhere, add it to your shell config."
-    echo ""
-    echo "  For Bash, add this line to ~/.bashrc:"
-    echo -e "    ${BOLD}export PATH=\"$INSTALL_DIR:\$PATH\"${NC}"
-    echo ""
-    echo "  For Zsh, add this line to ~/.zshrc:"
-    echo -e "    ${BOLD}export PATH=\"$INSTALL_DIR:\$PATH\"${NC}"
-    echo ""
-    echo "  Then reload your shell:"
-    echo -e "    ${BOLD}source ~/.bashrc${NC}   (or source ~/.zshrc)"
-fi
-
-echo -e "\n=========================================================="
-echo -e "  ${GREEN}Installation Complete! 2 binaries installed.${NC}"
-echo -e "=========================================================="
 echo ""
-echo "CLI Mode (headless, for scripting and power users):"
-echo "  ruscut input.jpg               # Remove background"
-echo "  ruscut input.jpg output.png    # Custom output path"
-echo "  ruscut --help                  # Show all options"
+echo "📦 Installing binaries..."
+
+install_binary() {
+    local src="$TMP_DIR/$1"
+    local dest_name="$2"
+    if [ -f "$src" ]; then
+        cp "$src" "$INSTALL_DIR/$dest_name"
+        chmod +x "$INSTALL_DIR/$dest_name"
+        echo "  🚀 Installed: $dest_name → $INSTALL_DIR"
+    fi
+}
+
+install_binary "$ASSET_CLI" "ruscut"
+install_binary "$ASSET_TUI" "ruscut-tui"
+
 echo ""
-echo "TUI Mode (interactive wizard, no commands to memorize):"
-echo "  ruscut-tui                     # Launch interactive wizard"
+echo "✅ Successfully installed ruscut v$VERSION!"
+echo "   ruscut     - CLI mode (try: ruscut --help)"
+echo "   ruscut-tui - TUI interactive mode (try: ruscut-tui)"
 echo ""
+echo "   Make sure $INSTALL_DIR is in your PATH."

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use crate::taxonomy::EngineNameVo;
+use std::time::Duration;
 
 /// Value Object representing the statistical report of a benchmark run.
 /// Complies with strict three-word naming and mandatory _vo taxonomy suffix.

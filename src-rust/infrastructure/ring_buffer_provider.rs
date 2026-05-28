@@ -31,11 +31,7 @@ impl GpuRingBuffer {
     ///
     /// # Safety
     /// Pointers must be valid mapped addresses from the physical PCIe MMIO/BAR space.
-    pub unsafe fn new(
-        buffer_ptr: *mut u32,
-        size_dwords: usize,
-        doorbell_ptr: *mut u32,
-    ) -> Self {
+    pub unsafe fn new(buffer_ptr: *mut u32, size_dwords: usize, doorbell_ptr: *mut u32) -> Self {
         Self {
             buffer: buffer_ptr,
             size_dwords,

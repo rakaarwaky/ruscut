@@ -1,57 +1,52 @@
-#!/bin/bash
-# dev.sh - Quick debug build + install (for development)
-# Faster than release build. Use during active development.
+#!/usr/bin/env bash
+# dev.sh - Local Development Build & Install
+# Runs quality gates (fmt + clippy) then installs both binaries locally.
+# For production install from GitHub Releases, use install.sh.
+#
+# Usage (from any directory):
+#   ./scripts/dev.sh
 
-set -e
+set -euo pipefail
 
+# Always run from the project root (parent of this script's directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT"
 
-# Terminal colors
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Determine install directory
-LOCAL_BIN="$HOME/.local/bin"
-CARGO_BIN="$HOME/.cargo/bin"
-INSTALL_DIR=""
-
-if [ -d "$CARGO_BIN" ]; then
-    INSTALL_DIR="$CARGO_BIN"
-elif [ -d "$LOCAL_BIN" ]; then
-    INSTALL_DIR="$LOCAL_BIN"
-else
-    mkdir -p "$LOCAL_BIN"
-    INSTALL_DIR="$LOCAL_BIN"
-fi
-
-echo -e "${BOLD}${BLUE}[dev] Quick debug build + install${NC}"
+echo "🔍 [1/3] Running Quality Gates..."
+echo "   Working directory: $PROJECT_ROOT"
 echo ""
 
-# Build debug mode (fast)
-echo -e "${BLUE}Building debug binaries (fast, no optimization)...${NC}"
-cd "$PROJECT_ROOT"
-cargo build
-
-if [ ! -f "target/debug/ruscut" ]; then
-    echo -e "${RED}ERROR: ruscut binary was not produced.${NC}"
+# Ensure code is formatted
+if ! cargo fmt --all --check >/dev/null 2>&1; then
+    echo "❌ Code is not formatted. Run 'cargo fmt' to fix."
+    echo "   Unformatted files:"
+    cargo fmt --all --check 2>&1 | grep '^Diff' | sed 's/^/   /'
     exit 1
 fi
-if [ ! -f "target/debug/ruscut-tui" ]; then
-    echo -e "${RED}ERROR: ruscut-tui binary was not produced.${NC}"
+echo "  ✅ Formatting OK"
+
+# Ensure no clippy warnings (treat warnings as errors — matches CI)
+if ! cargo clippy --all-targets --all-features -- -D warnings 2>&1; then
+    echo "❌ Clippy found warnings or errors. Fix them before installing."
     exit 1
 fi
+echo "  ✅ Clippy OK"
 
-# Install
-cp target/debug/ruscut "$INSTALL_DIR/ruscut"
-cp target/debug/ruscut-tui "$INSTALL_DIR/ruscut-tui"
-chmod +x "$INSTALL_DIR/ruscut" "$INSTALL_DIR/ruscut-tui"
+echo ""
+echo "🛠️  [2/3] Building & Installing local binaries..."
+# cargo install --path:
+#   - Builds in --release mode automatically
+#   - Discovers all [[bin]] targets (ruscut and ruscut-tui)
+#   - Installs to ~/.cargo/bin with correct permissions
+#   - --force  : overwrites existing binary
+#   - --locked : respects Cargo.lock for reproducible builds
+cargo install --path . --force --locked
 
-VERSION=$(grep -m 1 '^version = ' "$PROJECT_ROOT/Cargo.toml" | cut -d '"' -f 2)
-echo -e "${GREEN}Installed debug build v$VERSION -> $INSTALL_DIR${NC}"
-echo -e "  ruscut     (debug)"
-echo -e "  ruscut-tui (debug)"
+VERSION=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+echo ""
+echo "🎉 [3/3] Installation complete! v$VERSION"
+echo "   ruscut     → $(command -v ruscut 2>/dev/null || echo '~/.cargo/bin/ruscut')"
+echo "   ruscut-tui → $(command -v ruscut-tui 2>/dev/null || echo '~/.cargo/bin/ruscut-tui')"
+echo ""
+echo "   Try: ruscut --help"

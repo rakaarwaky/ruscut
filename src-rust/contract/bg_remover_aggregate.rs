@@ -1,5 +1,5 @@
-use crate::taxonomy::removal_types_vo::RemovalOptions;
 use crate::contract::RemovalUseCaseProtocol;
+use crate::taxonomy::removal_types_vo::RemovalOptions;
 
 /// Aggregate contract extending `RemovalUseCaseProtocol`.
 pub trait BgRemoverAggregate: RemovalUseCaseProtocol {

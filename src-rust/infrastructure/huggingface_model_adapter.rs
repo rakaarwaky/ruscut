@@ -1,7 +1,15 @@
-use std::path::{Path, PathBuf};
-use anyhow::Context;
 use crate::contract::ModelDownloaderPort;
-use crate::taxonomy::removal_types_vo::{get_cache_dir, ModelType};
+use crate::taxonomy::removal_types_vo::{ModelType, get_cache_dir};
+use anyhow::Context;
+use sha2::{Digest, Sha256};
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
+/// SHA256 checksums for verified model downloads (prevent tampering).
+/// Update these values after downloading the actual model files.
+/// Use `sha256sum ~/.cache/ruscut/rmbg-2.0.onnx` to compute.
+const MODEL_CHECKSUMS: &[(&str, &str)] =
+    &[("rmbg-2.0.onnx", "PLACEHOLDER_SHA256_UPDATE_AFTER_DOWNLOAD")];
 
 /// Adapter that downloads ONNX models from HuggingFace Hub silently.
 pub struct HuggingfaceModelAdapter {
@@ -21,7 +29,11 @@ impl Default for HuggingfaceModelAdapter {
 }
 
 impl ModelDownloaderPort for HuggingfaceModelAdapter {
-    fn downloader_ensure_model(&self, model_type: &ModelType, force: bool) -> anyhow::Result<PathBuf> {
+    fn downloader_ensure_model(
+        &self,
+        model_type: &ModelType,
+        force: bool,
+    ) -> anyhow::Result<PathBuf> {
         if !self.enabled {
             anyhow::bail!("Huggingface model adapter is disabled");
         }
@@ -29,11 +41,52 @@ impl ModelDownloaderPort for HuggingfaceModelAdapter {
         let target_path = cache_dir.join(model_type.filename());
 
         if force || !target_path.exists() {
-            download_model_impl(model_type.url(), &target_path, model_type.label())?;
+            download_model_impl(model_type.url(), &target_path, model_type.filename())?;
+        }
+
+        // Verify model integrity after download or if it already exists
+        let should_verify = MODEL_CHECKSUMS
+            .iter()
+            .find(|(name, _)| *name == model_type.filename())
+            .map(|(_, sha)| *sha)
+            .filter(|sha| *sha != "PLACEHOLDER_SHA256_UPDATE_AFTER_DOWNLOAD");
+
+        if let Some(expected_sha) = should_verify
+            && !verify_checksum(&target_path, expected_sha)?
+        {
+            let _ = std::fs::remove_file(&target_path);
+            anyhow::bail!(
+                "Model integrity check failed for '{}'! Expected SHA256: {}\n\
+                 This could indicate network corruption or tampering. \
+                 Re-run with --force to re-download.",
+                model_type.filename(),
+                expected_sha
+            );
         }
 
         Ok(target_path)
     }
+}
+
+/// Verifies the SHA256 checksum of a file against an expected value.
+fn verify_checksum(path: &Path, expected: &str) -> anyhow::Result<bool> {
+    let mut file =
+        std::fs::File::open(path).context("Failed to open model file for checksum verification")?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        let bytes_read = file
+            .read(&mut buffer)
+            .context("Failed to read model chunk for verification")?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    let actual = format!("{:x}", hasher.finalize());
+    Ok(actual == expected)
 }
 
 /// Download buffer size (16 KB).
@@ -47,7 +100,9 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
         .context("Failed to create HTTP client")?;
 
     let mut request = client.get(url);
-    if let Ok(token) = std::env::var("HF_TOKEN") && !token.is_empty() {
+    if let Ok(token) = std::env::var("HF_TOKEN")
+        && !token.is_empty()
+    {
         request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token));
     }
 
@@ -68,14 +123,18 @@ fn download_model_impl(url: &str, dest_path: &Path, model_label: &str) -> anyhow
     }
 
     if !response.status().is_success() {
-        anyhow::bail!("Failed to download model: HTTP status {}", response.status());
+        anyhow::bail!(
+            "Failed to download model: HTTP status {}",
+            response.status()
+        );
     }
 
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
     }
 
-    let mut file = std::fs::File::create(dest_path).context("Failed to create model file in cache")?;
+    let mut file =
+        std::fs::File::create(dest_path).context("Failed to create model file in cache")?;
     let mut buffer = [0; DOWNLOAD_BUFFER_SIZE];
     loop {
         let bytes_read = response

@@ -1,0 +1,19 @@
+[app]
+log_level = "info"
+enable_telemetry = false
+safe_mode = false
+
+[models.rmbg_2_0]
+url = "https://huggingface.co/yuvraj108c/RMBG-2.0/resolve/main/onnx/model.onnx"
+sha256 = "PLACEHOLDER_SHA256_UPDATE_AFTER_DOWNLOAD"
+cache_ttl_hours = 168
+
+[inference]
+prefer_gpu = true
+max_concurrent = 4
+timeout_seconds = 300
+
+[output]
+default_format = "png"
+compression_level = 6
+preserve_metadata = true

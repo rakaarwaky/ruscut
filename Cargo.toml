@@ -31,8 +31,21 @@ ratatui = "0.30"
 crossterm = "0.27"
 ash = "0.38"
 libc = "0.2"
+rayon = "1.10"
+sha2 = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+config = { version = "0.14", features = ["toml"] }
+serde = { version = "1.0", features = ["derive"] }
 
+[lib]
+name = "ruscut"
+path = "src-rust/lib.rs"
 
+[dev-dependencies]
+mockall = "0.13"
+tempfile = "3.10"
+proptest = "1.4"
 
 [[bin]]
 name = "ruscut"

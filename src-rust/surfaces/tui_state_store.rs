@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use ratatui::widgets::ListState;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobStatus {
@@ -42,10 +42,11 @@ impl AppStateStore {
 
     pub fn reload_files(&mut self) {
         self.items = Vec::new();
-        
+
         // Add parent directory navigation if it exists
         if let Some(parent) = self.current_dir.parent() {
-            self.items.push(("📁 ..".to_string(), parent.to_path_buf(), true));
+            self.items
+                .push(("📁 ..".to_string(), parent.to_path_buf(), true));
         }
 
         if let Ok(entries) = std::fs::read_dir(&self.current_dir) {
@@ -54,19 +55,24 @@ impl AppStateStore {
 
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
                 if path.is_dir() {
                     dirs.push((format!("📁 {}", name), path, true));
                 } else {
-                    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                    let ext = path
+                        .extension()
+                        .map(|e| e.to_string_lossy().to_lowercase())
+                        .unwrap_or_default();
                     if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" {
                         files.push((format!("📷 {}", name), path, false));
                     } else if crate::taxonomy::removal_types_vo::is_video_path(&path) {
                         files.push((format!("🎥 {}", name), path, false));
                     }
                 }
-
             }
 
             // Sort directories and files alphabetically

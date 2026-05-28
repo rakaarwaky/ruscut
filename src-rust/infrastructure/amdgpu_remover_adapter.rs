@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
 use crate::contract::{DirectAmdgpuRemoverPort, VulkanComputePort};
 use crate::taxonomy::{EngineNameVo, ModelPathVo, TensorDataVo};
+use std::sync::{Arc, Mutex};
 
 /// Standard target image dimensions for BRIA RMBG-2.0.
 const MODEL_WIDTH: u32 = 1024;
@@ -62,16 +62,20 @@ impl DirectAmdgpuRemoverPort for DirectAmdgpuRemoverAdapter {
         let total_pixels = (MODEL_WIDTH * MODEL_HEIGHT) as usize;
         let mut output_mask = vec![0.0f32; total_pixels];
 
-        let engine_guard = self.vulkan_engine.lock()
+        let engine_guard = self
+            .vulkan_engine
+            .lock()
             .map_err(|e| anyhow::anyhow!("Failed to lock Vulkan engine: {}", e))?;
         if let Some(ref engine) = *engine_guard {
             unsafe {
-                let size_in_bytes = (total_pixels * std::mem::size_of::<f32>()) as ash::vk::DeviceSize;
+                let size_in_bytes =
+                    (total_pixels * std::mem::size_of::<f32>()) as ash::vk::DeviceSize;
 
                 let (gpu_buffer, gpu_memory) = engine.vulkan_create_buffer(
                     size_in_bytes,
                     ash::vk::BufferUsageFlags::STORAGE_BUFFER,
-                    ash::vk::MemoryPropertyFlags::HOST_VISIBLE | ash::vk::MemoryPropertyFlags::HOST_COHERENT,
+                    ash::vk::MemoryPropertyFlags::HOST_VISIBLE
+                        | ash::vk::MemoryPropertyFlags::HOST_COHERENT,
                 )?;
 
                 engine.vulkan_dispatch_compute(
@@ -83,7 +87,10 @@ impl DirectAmdgpuRemoverPort for DirectAmdgpuRemoverAdapter {
                 )?;
 
                 let mapped_ptr = engine.vulkan_map_memory(
-                    gpu_memory, 0, size_in_bytes, ash::vk::MemoryMapFlags::empty(),
+                    gpu_memory,
+                    0,
+                    size_in_bytes,
+                    ash::vk::MemoryMapFlags::empty(),
                 )? as *mut f32;
                 std::ptr::copy_nonoverlapping(mapped_ptr, output_mask.as_mut_ptr(), total_pixels);
                 engine.vulkan_unmap_memory(gpu_memory);

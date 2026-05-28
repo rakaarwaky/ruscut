@@ -1,8 +1,25 @@
-use std::fs::OpenOptions;
-use std::path::Path;
-use core::ptr::{read_volatile, write_volatile};
 use crate::contract::PciBarPort;
 use crate::taxonomy::ModelPathVo;
+use anyhow::Context;
+use core::ptr::{read_volatile, write_volatile};
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Global flag to disable unsafe operations in production/sandboxed environments.
+static UNSAFE_OPERATIONS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Call this at startup to disable unsafe hardware access.
+/// Set RUSCUT_SAFE_MODE=1 environment variable to enable safe mode.
+pub fn disable_unsafe_operations() {
+    UNSAFE_OPERATIONS_ENABLED.store(false, Ordering::SeqCst);
+    tracing::warn!("Unsafe hardware operations disabled - running in safe mode");
+}
+
+/// Checks if unsafe operations are allowed in the current environment.
+pub fn is_unsafe_allowed() -> bool {
+    UNSAFE_OPERATIONS_ENABLED.load(Ordering::SeqCst)
+}
 
 /// Vendor and Device ID for AMD Radeon RX 6800 XT (Navi 21 / gfx1030)
 pub const AMD_VENDOR_ID: u16 = 0x1002;
@@ -21,6 +38,19 @@ pub struct GpuRegisterSpace {
 }
 
 impl GpuRegisterSpace {
+    /// Runtime check before any unsafe operation.
+    fn check_unsafe_allowed() -> anyhow::Result<()> {
+        if !UNSAFE_OPERATIONS_ENABLED.load(Ordering::SeqCst) {
+            anyhow::bail!(
+                "Unsafe PCI operations are disabled in this environment (RUSCUT_SAFE_MODE)"
+            );
+        }
+        if !cfg!(target_os = "linux") {
+            anyhow::bail!("PCI BAR access only supported on Linux");
+        }
+        Ok(())
+    }
+
     /// Creates a simulated register space for tests and environment fallbacks.
     pub fn new_simulated(size_bytes: usize) -> Self {
         let size_dwords = size_bytes / 4;
@@ -36,8 +66,13 @@ impl GpuRegisterSpace {
     ///
     /// # Safety
     /// Requires root privilege to read physical devices and map memory.
+    /// This function performs runtime safety checks before proceeding.
     pub unsafe fn map_pci_bar(pci_path: &Path, size_bytes: usize) -> anyhow::Result<Self> {
+        // Runtime safety check
+        Self::check_unsafe_allowed()?;
+
         if !pci_path.exists() {
+            tracing::debug!("PCI path not found, using simulated mode");
             return Ok(Self::new_simulated(size_bytes));
         }
 
@@ -45,10 +80,11 @@ impl GpuRegisterSpace {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open(pci_path)?;
+            .open(pci_path)
+            .context("Failed to open PCI device. Requires root privileges.")?;
 
         let fd = std::os::unix::io::AsRawFd::as_raw_fd(&file);
-        
+
         // Map the BAR into user memory using libc::mmap
         let map_addr = unsafe {
             libc::mmap(
@@ -62,7 +98,16 @@ impl GpuRegisterSpace {
         };
 
         if map_addr == libc::MAP_FAILED {
-            anyhow::bail!("Failed to mmap PCI BAR. Check root privileges.");
+            let err = std::io::Error::last_os_error();
+            tracing::error!(
+                errno = err.raw_os_error(),
+                "mmap failed for PCI BAR. This may require: (1) root privileges, (2) correct PCI path, (3) IOMMU disabled"
+            );
+            anyhow::bail!(
+                "Failed to mmap PCI BAR: {} (errno: {})",
+                err,
+                err.raw_os_error().unwrap_or(-1)
+            );
         }
 
         Ok(Self {

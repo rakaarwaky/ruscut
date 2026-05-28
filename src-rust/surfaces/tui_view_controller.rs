@@ -1,19 +1,23 @@
+use super::tui_state_store::{AppStateStore, JobStatus};
 use crate::agent::BgRemoverOrchestrator;
 use crate::contract::{BgRemoverAggregate, RemovalUseCaseProtocol};
-use crate::taxonomy::removal_types_vo::{get_cache_dir, ModelType};
-use super::tui_state_store::{AppStateStore, JobStatus};
+use crate::taxonomy::removal_types_vo::{ModelType, get_cache_dir};
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
-    widgets::{Block, Borders, BorderType, List, ListItem, Paragraph, Gauge},
-    Frame,
+    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph},
 };
 
 pub struct TuiViewController;
 
 impl TuiViewController {
-    pub fn render_ui(frame: &mut Frame, state: &mut AppStateStore, orchestrator: &BgRemoverOrchestrator) {
+    pub fn render_ui(
+        frame: &mut Frame,
+        state: &mut AppStateStore,
+        orchestrator: &BgRemoverOrchestrator,
+    ) {
         let area = frame.area();
 
         // 1. Divide layout vertically into: Header, Main Content, and Footer
@@ -32,8 +36,7 @@ impl TuiViewController {
     }
 
     fn draw_header(frame: &mut Frame, area: Rect) {
-        let logo = 
-"  ____                             _   
+        let logo = "  ____                             _   
  |  _ \\  _   _  ___   ___  _   _  | |_ 
  | |_) || | | |/ __| / __|| | | | | __|
  |  _ < | |_| |\\__ \\| (__ | |_| | | |_ 
@@ -41,19 +44,20 @@ impl TuiViewController {
 
         let header_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
-            ])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
-        let logo_widget = Paragraph::new(logo)
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+        let logo_widget = Paragraph::new(logo).style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
         frame.render_widget(logo_widget, header_layout[0]);
 
-        let title_widget = Paragraph::new(
-            "\nAI-Powered Background Remover - v0.1.4\nClean architecture & local execution."
-        )
+        let title_widget = Paragraph::new(format!(
+            "\nAI-Powered Background Remover - v{}\nClean architecture & local execution.",
+            env!("CARGO_PKG_VERSION")
+        ))
         .alignment(ratatui::layout::Alignment::Right)
         .style(Style::default().fg(Color::DarkGray).italic());
         frame.render_widget(title_widget, header_layout[1]);
@@ -79,7 +83,8 @@ impl TuiViewController {
     }
 
     fn draw_file_explorer(frame: &mut Frame, state: &mut AppStateStore, area: Rect) {
-        let items: Vec<ListItem> = state.items
+        let items: Vec<ListItem> = state
+            .items
             .iter()
             .map(|(display_name, _, is_dir)| {
                 let style = if *is_dir {
@@ -91,20 +96,23 @@ impl TuiViewController {
             })
             .collect();
 
-        let dir_title = format!(" 📁 Directory Explorer (Path: {}) ", state.current_dir.to_string_lossy());
+        let dir_title = format!(
+            " 📁 Directory Explorer (Path: {}) ",
+            state.current_dir.to_string_lossy()
+        );
         let list_widget = List::new(items)
             .block(
                 Block::default()
                     .title(dir_title.cyan().bold())
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(Color::Cyan))
+                    .border_style(Style::default().fg(Color::Cyan)),
             )
             .highlight_style(
                 Style::default()
                     .bg(Color::Blue)
                     .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol(" > ");
 
@@ -139,7 +147,7 @@ impl TuiViewController {
         let cache_dir = get_cache_dir();
         let model_path = cache_dir.join(ModelType::Full.filename());
         let is_cached = model_path.exists();
-        
+
         let cache_status = if is_cached {
             if let Ok(metadata) = std::fs::metadata(&model_path) {
                 let size_mb = metadata.len() as f64 / 1024.0 / 1024.0;
@@ -165,14 +173,18 @@ impl TuiViewController {
         };
 
         let info_text = format!(
-"  - Model Variant   : {}
+            "  - Model Variant   : {}
   - AI Engine       : {} [{}]
   - Platform/OS     : {} ({})
   - Cache Location  : {:?}
   - Model Status    : {}
   - Force Download  : {} [Press 'f' to toggle]",
             ModelType::Full.label().cyan(),
-            orchestrator.usecase_get_engine_name().as_str().cyan().bold(),
+            orchestrator
+                .usecase_get_engine_name()
+                .as_str()
+                .cyan()
+                .bold(),
             engine_ready,
             std::env::consts::OS.to_uppercase(),
             std::env::consts::ARCH.to_uppercase(),
@@ -181,14 +193,13 @@ impl TuiViewController {
             force_status
         );
 
-        let diagnostics_widget = Paragraph::new(info_text)
-            .block(
-                Block::default()
-                    .title(" 🩺 System Diagnostics & Health ".blue().bold())
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(Color::Blue))
-            );
+        let diagnostics_widget = Paragraph::new(info_text).block(
+            Block::default()
+                .title(" 🩺 System Diagnostics & Health ".blue().bold())
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Blue)),
+        );
 
         frame.render_widget(diagnostics_widget, area);
     }
@@ -203,7 +214,9 @@ impl TuiViewController {
                 Color::DarkGray
             }
             JobStatus::Starting => {
-                status_message.push_str("Status: STARTING WIZARD...\nInitializing async threads and locking models.");
+                status_message.push_str(
+                    "Status: STARTING WIZARD...\nInitializing async threads and locking models.",
+                );
                 Color::Blue
             }
             JobStatus::LoadingModel => {
@@ -215,7 +228,8 @@ impl TuiViewController {
                 Color::Cyan
             }
             JobStatus::SavingOutput => {
-                status_message.push_str("Status: SAVING FILE...\nWriting transparent outputs onto disk.");
+                status_message
+                    .push_str("Status: SAVING FILE...\nWriting transparent outputs onto disk.");
                 Color::Magenta
             }
             JobStatus::Success(out_path) => {
@@ -226,10 +240,7 @@ impl TuiViewController {
                 Color::Green
             }
             JobStatus::Failed(err) => {
-                status_message.push_str(&format!(
-                    "Status: FAILED ❌\nExecution error:\n{}",
-                    err
-                ));
+                status_message.push_str(&format!("Status: FAILED ❌\nExecution error:\n{}", err));
                 Color::Red
             }
         };
@@ -239,8 +250,17 @@ impl TuiViewController {
         if let Some(ref input) = state.active_input {
             detailed_text.push_str(&format!(
                 "  - Processing File  : {}\n  - Target Output    : {}\n\n",
-                input.file_name().map(|n| n.to_string_lossy()).unwrap_or_default().yellow(),
-                state.active_output.as_ref().map(|o| o.to_string_lossy()).unwrap_or_default().cyan()
+                input
+                    .file_name()
+                    .map(|n| n.to_string_lossy())
+                    .unwrap_or_default()
+                    .yellow(),
+                state
+                    .active_output
+                    .as_ref()
+                    .map(|o| o.to_string_lossy())
+                    .unwrap_or_default()
+                    .cyan()
             ));
         }
         detailed_text.push_str(&status_message);
@@ -270,28 +290,34 @@ impl TuiViewController {
             .block(Block::default().borders(Borders::NONE))
             .gauge_style(
                 Style::default()
-                    .fg(if state.progress == 100 { Color::Green } else { Color::Cyan })
+                    .fg(if state.progress == 100 {
+                        Color::Green
+                    } else {
+                        Color::Cyan
+                    })
                     .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             )
             .percent(state.progress);
         frame.render_widget(gauge_widget, job_chunks[1]);
     }
 
     fn draw_footer(frame: &mut Frame, area: Rect) {
-        let footer_text = 
-"  ▲/▼ : Navigate Explorer  |  Enter : Select Folder / Execute Process  |  f : Toggle Force Model Download
-   Backspace/Esc : Go Up One Directory Folder  |  q : Quit Application and Restore Terminal";
-
+        let footer_text = "  ▲/▼ : Navigate Explorer  |  Enter : Select Folder / Execute Process  |  f : Toggle Force Model Download
+    Backspace/Esc : Go Up One Directory Folder  |  q : Quit Application and Restore Terminal";
 
         let footer_widget = Paragraph::new(footer_text)
             .alignment(ratatui::layout::Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM))
+            .style(
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::DIM),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(Color::DarkGray))
+                    .border_style(Style::default().fg(Color::DarkGray)),
             );
 
         frame.render_widget(footer_widget, area);

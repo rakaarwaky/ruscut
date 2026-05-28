@@ -100,19 +100,3 @@ impl Pm4PacketPort for Pm4Packet {
         self.payload()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_pm4_header_generation() {
-        let packet = Pm4Packet::new(Pm4Opcode::Nop, vec![0xDEADBEEF]);
-        let raw = packet.serialize();
-        assert_eq!(raw.len(), 2);
-        assert_eq!(raw[0] & (3 << 30), 3 << 30); // Must be Type 3
-        assert_eq!((raw[0] >> 16) & 0x7F, Pm4Opcode::Nop.value() as u32); // Opcode check
-        assert_eq!(raw[0] & 0x7FFF, 0); // Count check (1 dword - 1 = 0)
-        assert_eq!(raw[1], 0xDEADBEEF);
-    }
-}

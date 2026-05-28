@@ -30,7 +30,7 @@ architecture:
       path: "src-rust/"
       recursive: false
       suffix:
-        - strict: ["entry"]
+        - strict: ["entry", "config", "lib"]
     taxonomy:
       path: "src-rust/taxonomy"
       recursive: true

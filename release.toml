@@ -1,0 +1,22 @@
+# cargo-release configuration
+# https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+
+# Prevent accidental crates.io publishes — ruscut distributes via GitHub Releases.
+publish = false
+
+# Commit message for version bump (conventional commits format)
+pre-release-commit-message = "chore: release v{{version}}"
+
+# Git tag format
+tag-name = "v{{version}}"
+tag-message = "Release v{{version}}"
+
+# Push the release tag to trigger GitHub Actions CI/CD
+push = true
+
+# Allow releasing from master or main branch
+allow-branch = ["master", "main"]
+
+# NOTE: No [[pre-release-replacements]] needed.
+# Both binaries use `env!("CARGO_PKG_VERSION")` which is resolved at compile
+# time from Cargo.toml — cargo-release updates Cargo.toml automatically.

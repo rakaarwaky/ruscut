@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Supported AI model variants for background removal.
 #[derive(Debug, Clone)]
@@ -24,6 +24,30 @@ impl ModelType {
     }
 }
 
+/// Sanitizes a path to prevent directory traversal attacks.
+pub fn sanitize_path(input: &Path) -> anyhow::Result<PathBuf> {
+    let mut sanitized = PathBuf::new();
+    for component in input.components() {
+        match component {
+            Component::Normal(c) => sanitized.push(c),
+            Component::ParentDir => {
+                if !sanitized.pop() {
+                    anyhow::bail!("Path traversal attempt detected: {:?}", input);
+                }
+            }
+            Component::RootDir | Component::CurDir => continue,
+            Component::Prefix(_) => {
+                if cfg!(windows) {
+                    sanitized.push(component);
+                } else {
+                    anyhow::bail!("Unexpected path prefix in Unix environment: {:?}", input);
+                }
+            }
+        }
+    }
+    Ok(sanitized)
+}
+
 /// Options for a single background removal operation.
 #[derive(Debug, Clone)]
 pub struct RemovalOptions {
@@ -37,6 +61,25 @@ pub struct RemovalOptions {
     pub model_type: ModelType,
     /// If true, re-download the model even if it already exists in cache.
     pub force_download: bool,
+}
+
+impl RemovalOptions {
+    /// Create a new RemovalOptions instance with sanitized file paths.
+    pub fn new_safe(
+        input_path: PathBuf,
+        output_path: PathBuf,
+        custom_model_path: Option<PathBuf>,
+        model_type: ModelType,
+        force_download: bool,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            input_path: sanitize_path(&input_path)?,
+            output_path: sanitize_path(&output_path)?,
+            custom_model_path: custom_model_path.map(|p| sanitize_path(&p)).transpose()?,
+            model_type,
+            force_download,
+        })
+    }
 }
 
 /// Returns the platform-specific cache directory for Ruscut models.
@@ -79,5 +122,3 @@ pub fn get_default_output_path(input_path: &Path) -> PathBuf {
     }
     default_dir.join(new_filename)
 }
-
-

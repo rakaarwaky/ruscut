@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use crate::taxonomy::removal_types_vo::RemovalOptions;
 use crate::contract::RemovalUseCaseProtocol;
+use crate::taxonomy::removal_types_vo::RemovalOptions;
+use std::sync::Arc;
 
 /// Aggregate contract for the dependency injection container.
 ///
