@@ -1,0 +1,85 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'src-rust/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'src-rust/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings" # Treat all compiler warnings as errors to keep code ultra-clean
+
+jobs:
+  # Job 1: Quick Formatting Check (Fails fast if code styling is off)
+  fmt:
+    name: Code Formatting Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Run rustfmt check
+        run: cargo fmt --all -- --check
+
+  # Job 2: Code Quality Analysis (Clippy Lints)
+  clippy:
+    name: Lints (Clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry & builds
+        uses: swatinem/rust-cache@v2
+
+      - name: Run clippy analysis
+        run: cargo clippy --workspace --all-targets --all-features
+
+  # Job 3: Multi-Platform Test Execution (Ensures Cross-Platform correctness)
+  test:
+    name: Test ${{ matrix.os }}
+    needs: [fmt, clippy] # Run tests only if format and lints are green
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & builds
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+
+      - name: Compile and Run Tests
+        run: cargo test --workspace --all-targets --all-features --verbose
