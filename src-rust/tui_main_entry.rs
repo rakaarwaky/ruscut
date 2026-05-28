@@ -12,7 +12,7 @@ async fn main() {
     let container = agent::DependencyInjectionContainer::new();
     let orchestrator = std::sync::Arc::new(agent::BgRemoverOrchestrator::new(container.get_usecase()));
 
-    let handler = surfaces::tui_command_handler::TuiCommandHandler::new();
+    let handler = surfaces::tui_command_page::TuiCommandPage::new();
     if let Err(err) = handler.run(&orchestrator).await {
         eprintln!("ERROR: {:?}", err);
         std::process::exit(1);

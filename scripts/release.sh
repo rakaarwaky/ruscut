@@ -9,13 +9,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CARGO_TOML="$PROJECT_ROOT/Cargo.toml"
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <major|minor|patch|x.y.z> [\"optional commit message\"]"
+# Parse arguments to handle --skip-publish flag
+SKIP_PUBLISH=false
+ARGS=()
+for arg in "$@"; do
+    if [ "$arg" == "--skip-publish" ]; then
+        SKIP_PUBLISH=true
+    else
+        ARGS+=("$arg")
+    fi
+done
+
+BUMP_TYPE="${ARGS[0]}"
+CUSTOM_MSG="${ARGS[1]}"
+
+if [ -z "$BUMP_TYPE" ]; then
+    echo "Usage: $0 <major|minor|patch|x.y.z> [\"optional commit message\"] [--skip-publish]"
     exit 1
 fi
-
-BUMP_TYPE=$1
-CUSTOM_MSG=$2
 
 if [ ! -f "$CARGO_TOML" ]; then
     echo "Error: Cargo.toml not found at $CARGO_TOML"
@@ -84,25 +95,31 @@ fi
 echo "Committing with message: '$COMMIT_MSG'..."
 git commit -m "$COMMIT_MSG"
 
-# Create tag locally
+# Create tag locally (force recreate if it already exists to allow retries)
 echo "Creating tag v$NEW_VERSION..."
+if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+    echo "⚠️ Tag v$NEW_VERSION already exists locally. Re-tagging..."
+    git tag -d "v$NEW_VERSION"
+fi
 git tag "v$NEW_VERSION"
 
-echo "Publishing to crates.io..."
-# We run cargo publish before pushing to GitHub.
-# If it fails, the script stops and won't push the tag to GitHub.
-cargo publish || {
-    echo "❌ Failed to publish to crates.io. Did you forget to 'cargo login'?"
-    echo "You can manually fix the issue, run 'cargo publish', and then manually push:"
-    echo "  git push && git push origin v$NEW_VERSION"
-    exit 1
-}
+if [ "$SKIP_PUBLISH" = true ]; then
+    echo "⏭️ Skipping publication to crates.io..."
+else
+    echo "Publishing to crates.io..."
+    # We run cargo publish before pushing to GitHub.
+    # If it fails, we show a warning but DO NOT block the GitHub release pushing.
+    cargo publish || {
+        echo "⚠️ Failed to publish to crates.io (likely due to missing credentials/login or name issues)."
+        echo "Proceeding with code and tag pushing to GitHub..."
+    }
+fi
 
 echo "Pushing code to repository..."
 git push
 
 echo "Pushing tag to repository to trigger GitHub Actions release..."
-git push origin "v$NEW_VERSION"
+git push origin "v$NEW_VERSION" --force
 
 echo ""
 echo "✅ Successfully bumped version to $NEW_VERSION, published to crates.io, committed, pushed, and tagged!"

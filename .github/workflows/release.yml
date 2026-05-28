@@ -101,13 +101,40 @@ jobs:
         run: |
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name_tui }} ${{ matrix.asset_name_tui }}
 
-      - name: Upload CLI binary to Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload binaries as artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: ${{ matrix.asset_name_cli }}
-          generate_release_notes: true
+          name: ruscut-binaries-${{ matrix.target }}
+          path: |
+            ${{ matrix.asset_name_cli }}
+            ${{ matrix.asset_name_tui }}
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Upload TUI binary to Release
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ always() && !cancelled() && (needs.build.result == 'success' || contains(needs.build.result, 'failure')) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare assets for release
+        run: |
+          mkdir -p release_assets
+          # Find all files in the artifacts directory and copy them to release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          echo "Assets to be released:"
+          ls -lh release_assets/
+
+      - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.asset_name_tui }}
+          files: release_assets/*
+          generate_release_notes: true

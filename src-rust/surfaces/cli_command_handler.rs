@@ -8,7 +8,7 @@ use crate::taxonomy::RemovalTransferVo;
 
 #[derive(Parser, Debug)]
 #[command(name = "ruscut")]
-#[command(author = "Antigravity <google-deepmind>")]
+#[command(author = "RakaArwaky>")]
 #[command(version = "0.1.0")]
 #[command(about = "AI-powered Background Remover CLI in Rust (AES Architecture)", long_about = None)]
 struct Args {
