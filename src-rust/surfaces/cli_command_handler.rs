@@ -10,7 +10,7 @@ use crate::taxonomy::RemovalTransferVo;
 #[derive(Parser, Debug)]
 #[command(name = "ruscut")]
 #[command(author = "RakaArwaky>")]
-#[command(version = "0.1.0")]
+#[command(version = "0.1.3")]
 #[command(about = "AI-powered Background Remover CLI in Rust (AES Architecture)", long_about = None)]
 struct Args {
     /// Path to input image or video file. Use "doctor" to run system diagnostics.
