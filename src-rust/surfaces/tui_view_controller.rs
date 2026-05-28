@@ -52,7 +52,7 @@ impl TuiViewController {
         frame.render_widget(logo_widget, header_layout[0]);
 
         let title_widget = Paragraph::new(
-            "\nAI-Powered Background Remover - v0.1.3\nClean architecture & local execution."
+            "\nAI-Powered Background Remover - v0.1.4\nClean architecture & local execution."
         )
         .alignment(ratatui::layout::Alignment::Right)
         .style(Style::default().fg(Color::DarkGray).italic());
