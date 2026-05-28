@@ -1,6 +1,6 @@
 [package]
 name = "ruscut"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2024"
 description = "AI-powered background remover CLI and TUI built in Rust using ONNX/BRIA RMBG-2.0"
 license = "MIT"
