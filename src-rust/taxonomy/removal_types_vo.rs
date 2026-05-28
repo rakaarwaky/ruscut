@@ -49,14 +49,35 @@ pub fn get_cache_dir() -> PathBuf {
     }
 }
 
-/// Generates a default output path by appending `_no_bg.png` to the input filename.
+/// Checks if a file path is a supported video format.
+pub fn is_video_path(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext_str = ext.to_string_lossy().to_lowercase();
+        matches!(
+            ext_str.as_str(),
+            "mp4" | "m4v" | "mov" | "webm" | "avi" | "mkv" | "gif" | "ogg" | "wmv"
+        )
+    } else {
+        false
+    }
+}
+
+/// Generates a default output path by appending `_no_bg.png` to the input filename (or `_no_bg_sequence` directory for videos).
 pub fn get_default_output_path(input_path: &Path) -> PathBuf {
-    let mut output_path = input_path.to_path_buf();
     let file_stem = input_path
         .file_stem()
         .map(|s| s.to_string_lossy())
         .unwrap_or_else(|| std::borrow::Cow::Borrowed("output"));
-    let new_filename = format!("{}_no_bg.png", file_stem);
-    output_path.set_file_name(new_filename);
-    output_path
+    let new_filename = if is_video_path(input_path) {
+        format!("{}_no_bg_sequence", file_stem)
+    } else {
+        format!("{}_no_bg.png", file_stem)
+    };
+    let default_dir = get_cache_dir().join("output");
+    if !default_dir.exists() {
+        let _ = std::fs::create_dir_all(&default_dir);
+    }
+    default_dir.join(new_filename)
 }
+
+

@@ -62,8 +62,11 @@ impl AppStateStore {
                     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
                     if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" {
                         files.push((format!("📷 {}", name), path, false));
+                    } else if crate::taxonomy::removal_types_vo::is_video_path(&path) {
+                        files.push((format!("🎥 {}", name), path, false));
                     }
                 }
+
             }
 
             // Sort directories and files alphabetically

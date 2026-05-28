@@ -1,5 +1,5 @@
 use crate::agent::BgRemoverOrchestrator;
-use crate::contract::BgRemoverAggregate;
+use crate::contract::{BgRemoverAggregate, RemovalUseCaseProtocol};
 use crate::taxonomy::removal_types_vo::{get_cache_dir, ModelType};
 use super::tui_state_store::{AppStateStore, JobStatus};
 
@@ -166,12 +166,13 @@ impl TuiViewController {
 
         let info_text = format!(
 "  - Model Variant   : {}
-  - AI Engine       : ONNX Runtime [{}]
+  - AI Engine       : {} [{}]
   - Platform/OS     : {} ({})
   - Cache Location  : {:?}
   - Model Status    : {}
   - Force Download  : {} [Press 'f' to toggle]",
             ModelType::Full.label().cyan(),
+            orchestrator.usecase_get_engine_name().as_str().cyan().bold(),
             engine_ready,
             std::env::consts::OS.to_uppercase(),
             std::env::consts::ARCH.to_uppercase(),
@@ -198,7 +199,7 @@ impl TuiViewController {
 
         let text_color = match &state.job_status {
             JobStatus::Idle => {
-                status_message.push_str("Status: IDLE\nSelect an image file in the explorer and press [Enter] to start.");
+                status_message.push_str("Status: IDLE\nSelect an image or video file in the explorer and press [Enter] to start.");
                 Color::DarkGray
             }
             JobStatus::Starting => {
@@ -214,7 +215,7 @@ impl TuiViewController {
                 Color::Cyan
             }
             JobStatus::SavingOutput => {
-                status_message.push_str("Status: SAVING FILE...\nWriting transparent PNG format onto disk.");
+                status_message.push_str("Status: SAVING FILE...\nWriting transparent outputs onto disk.");
                 Color::Magenta
             }
             JobStatus::Success(out_path) => {
@@ -237,7 +238,7 @@ impl TuiViewController {
         let mut detailed_text = String::new();
         if let Some(ref input) = state.active_input {
             detailed_text.push_str(&format!(
-                "  - Processing Image : {}\n  - Target Output    : {}\n\n",
+                "  - Processing File  : {}\n  - Target Output    : {}\n\n",
                 input.file_name().map(|n| n.to_string_lossy()).unwrap_or_default().yellow(),
                 state.active_output.as_ref().map(|o| o.to_string_lossy()).unwrap_or_default().cyan()
             ));
@@ -254,7 +255,7 @@ impl TuiViewController {
             .split(area);
 
         let status_block = Block::default()
-            .title(" 📷 Background Removal Engine ".blue().bold())
+            .title(" ⚙️ Background Removal Engine ".blue().bold())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Blue));
@@ -279,8 +280,9 @@ impl TuiViewController {
 
     fn draw_footer(frame: &mut Frame, area: Rect) {
         let footer_text = 
-"  ▲/▼ : Navigate Explorer  |  Enter : Select Folder / Execute Image  |  f : Toggle Force Model Download
-  Backspace/Esc : Go Up One Directory Folder  |  q : Quit Application and Restore Terminal";
+"  ▲/▼ : Navigate Explorer  |  Enter : Select Folder / Execute Process  |  f : Toggle Force Model Download
+   Backspace/Esc : Go Up One Directory Folder  |  q : Quit Application and Restore Terminal";
+
 
         let footer_widget = Paragraph::new(footer_text)
             .alignment(ratatui::layout::Alignment::Center)

@@ -138,7 +138,7 @@ impl TuiCommandPage {
                                             };
 
                                             let _ = job_tx.send(JobStatus::RemovingBackground);
-                                            match BgRemoverAggregate::execute(&orch, &options) {
+                                            match BgRemoverAggregate::aggregate_execute(&orch, &options) {
                                                 Ok(_) => {
                                                     let _ = job_tx.send(JobStatus::SavingOutput);
                                                     let _ = job_tx.send(JobStatus::Success(options.output_path));

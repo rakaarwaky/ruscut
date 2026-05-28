@@ -13,10 +13,9 @@ exclude = [".github", "*.sh", "target"]
 
 [features]
 default = []
-rocm = ["ort/rocm"]
 
 [dependencies]
-ort = "2.0.0-rc.12"
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-21", "copy-dylibs", "download-binaries", "tls-rustls"] }
 image = "0.25"
 fast_image_resize = "3.0"
 ndarray = { version = "0.17", features = ["std"] }
@@ -30,6 +29,10 @@ dialoguer = "0.12.0"
 tokio = { version = "1", features = ["full"] }
 ratatui = "0.30"
 crossterm = "0.27"
+ash = "0.38"
+libc = "0.2"
+
+
 
 [[bin]]
 name = "ruscut"

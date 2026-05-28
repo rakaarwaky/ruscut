@@ -35,8 +35,8 @@ The most widely used open-source background removal tool is **rembg** (21,700+ G
 - **Dual Interface**: Ships both a headless CLI (`ruscut`) for scripting and an interactive TUI wizard (`ruscut-tui`) for guided, menu-driven usage.
 - **Local AI Inference**: Fast background removal using ONNX Runtime. No external APIs or internet access required after the model is downloaded.
 - **Single High-Precision Model**: Exclusively uses the **BRIA RMBG-2.0 model (1.02 GB)** to ensure maximum accuracy and pixel-perfect quality out-of-the-box, without requiring complex parameter configurations.
-- **Hardware Acceleration**: High-performance resizing using `fast_image_resize` and hardware acceleration via ONNX Runtime (CPU/GPU).
-- **Auto Cache Management**: Automatic downloading and local caching of Hugging Face ONNX assets with progress bar tracking.
+- **Hardware Acceleration**: High-performance resizing using `fast_image_resize` and hardware-accelerated direct GPU execution on AMD Radeon RDNA2 architectures (such as RX 6800 XT) via a custom direct Vulkan Compute backend (`ash` crate), bypassing ROCm entirely.
+- **Auto Cache Management**: Automatic downloading and local caching of Hugging Face ONNX assets silently.
 - **Strict Architectural Integrity**: 100/100 AES architectural compliance score. Zero bypass, zero cyclic dependencies, and zero layer boundary violations.
 
 ---
@@ -151,20 +151,21 @@ The project is structured according to the strict 6-layer Architecture Enforceme
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  SURFACES (cli_command_handler.rs)                      │  Parses CLI args, maps options to Taxonomy.
-│           (tui_command_handler.rs)                      │  Interactive TUI wizard using dialoguer.
+│           (tui_command_page.rs)                         │  Interactive TUI dashboard using ratatui.
 ├─────────────────────────────────────────────────────────┤
 │  AGENT (dependency_injection_container.rs)              │  Assembles layers, registers dependencies.
 │        (bg_remover_orchestrator.rs)                     │  Stateless workflow orchestrator.
 ├─────────────────────────────────────────────────────────┤
-│  CAPABILITIES (removal_usecase_executor.rs)             │  Executes core use case (orchestrates ports).
+│  CAPABILITIES (removal_usecase_executor.rs)             │  Executes core use case, holds all image
+│                                                         │  processing and timing/benchmarking logic.
 ├─────────────────────────────────────────────────────────┤
 │  CONTRACT (removal_usecase_protocol.rs)                 │  Defines interface contracts, ports, and
-│           (background_remover_port.rs)                  │  transfer aggregates (data boundaries).
+│           (onnx_remover_port.rs, pci_bar_port.rs, etc.) │  transfer aggregates (data boundaries).
 ├─────────────────────────────────────────────────────────┤
-│  INFRASTRUCTURE (onnx_remover_adapter.rs)               │  Concrete technical implementations: ORT,
-│                 (huggingface_model_adapter.rs)          │  image operations, and HTTP downloads.
+│  INFRASTRUCTURE (onnx_remover_adapter.rs)               │  Concrete technical implementations: ORT, Vulkan
+│                 (pci_bar_provider.rs, etc.)             │  BAR, PM4 loader, ring buffer, video adapter.
 ├─────────────────────────────────────────────────────────┤
-│  TAXONOMY (removal_types_vo.rs)                         │  Value objects, model types, and domain bounds.
+│  TAXONOMY (removal_types_vo.rs, removal_transfer_vo.rs) │  Value objects, model types, and domain bounds.
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -175,20 +176,34 @@ src-rust/
 ├── cli_main_entry.rs          # Binary 1: CLI composition root
 ├── tui_main_entry.rs          # Binary 2: TUI composition root
 ├── taxonomy/                  # Level 1: Domain types and Value Objects (VOs)
+│   ├── removal_transfer_vo.rs
 │   ├── removal_types_vo.rs
 │   └── mod.rs
 ├── contract/                  # Level 2: Inter-layer interfaces (Ports & Protocols)
-│   ├── background_remover_port.rs
+│   ├── bg_remover_aggregate.rs
+│   ├── di_container_aggregate.rs
+│   ├── direct_amdgpu_remover_port.rs
 │   ├── model_downloader_port.rs
-│   ├── removal_transfer_aggregate.rs
+│   ├── onnx_remover_port.rs
+│   ├── pci_bar_port.rs
+│   ├── pm4_packet_port.rs
 │   ├── removal_usecase_protocol.rs
+│   ├── ring_buffer_port.rs
+│   ├── video_processor_port.rs
+│   ├── vulkan_compute_port.rs
 │   └── mod.rs
 ├── capabilities/              # Level 3: Use case implementations
 │   ├── removal_usecase_executor.rs
 │   └── mod.rs
-├── infrastructure/            # Level 4: Concrete technology adaptors
+├── infrastructure/            # Level 4: Concrete technology adaptors (Flat structure!)
+│   ├── direct_amdgpu_remover_adapter.rs
+│   ├── ffmpeg_video_adapter.rs
 │   ├── huggingface_model_adapter.rs
 │   ├── onnx_remover_adapter.rs
+│   ├── pci_bar_provider.rs
+│   ├── pm4_packet_loader.rs
+│   ├── ring_buffer_provider.rs
+│   ├── vulkan_compute_provider.rs
 │   └── mod.rs
 ├── agent/                     # Level 5: Dependency injection and coordination
 │   ├── dependency_injection_container.rs
@@ -196,7 +211,9 @@ src-rust/
 │   └── mod.rs
 └── surfaces/                  # Level 6: Surface handlers (CLI and TUI)
     ├── cli_command_handler.rs
-    ├── tui_command_handler.rs
+    ├── tui_command_page.rs
+    ├── tui_state_store.rs
+    ├── tui_view_controller.rs
     └── mod.rs
 ```
 

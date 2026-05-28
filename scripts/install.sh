@@ -44,13 +44,48 @@ if ! command -v cargo &>/dev/null; then
         exit 1
     fi
 else
-    echo -e "  ${GREEN}Found: $(cargo --version)${NC}"
+    echo -e "  ${GREEN}Found Rust: $(cargo --version)${NC}"
 fi
+
+# Check for FFmpeg (required for video support)
+if ! command -v ffmpeg &>/dev/null; then
+    echo -e "  ${YELLOW}Warning: FFmpeg is not installed on your system!${NC}"
+    echo "  FFmpeg is required to process video files (MP4, MOV, WebM, GIF, etc.)."
+    echo "  (Note: Image processing will still work without FFmpeg.)"
+    echo ""
+    
+    # Auto-installation for Ubuntu/Debian/Pop!_OS (apt) and macOS (Homebrew)
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if command -v apt-get &>/dev/null; then
+            echo -n "  Would you like to install FFmpeg now via 'apt'? (y/n): "
+            read -r ffmpeg_response
+            if [[ "$ffmpeg_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+                echo -e "${BLUE}Running: sudo apt-get update && sudo apt-get install -y ffmpeg...${NC}"
+                sudo apt-get update && sudo apt-get install -y ffmpeg
+            fi
+        fi
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v brew &>/dev/null; then
+            echo -n "  Would you like to install FFmpeg now via Homebrew? (y/n): "
+            read -r ffmpeg_response
+            if [[ "$ffmpeg_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+                echo -e "${BLUE}Running: brew install ffmpeg...${NC}"
+                brew install ffmpeg
+            fi
+        fi
+    fi
+else
+    FFMPEG_VER=$(ffmpeg -version | head -n 1)
+    echo -e "  ${GREEN}Found FFmpeg: $FFMPEG_VER${NC}"
+fi
+
 
 # 2. Build ALL binaries in release mode
 echo -e "\n${BOLD}[2/4] Compiling all binaries in Release mode...${NC}"
+
 echo -e "${BLUE}Compiling ruscut (CLI) and ruscut-tui (Interactive). Please wait...${NC}"
 cargo build --release
+
 
 # Verify both binaries were produced
 if [ ! -f "target/release/ruscut" ]; then

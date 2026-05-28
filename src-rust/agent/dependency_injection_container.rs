@@ -2,6 +2,8 @@ use std::sync::Arc;
 use crate::contract::{RemovalUseCaseProtocol, DiContainerAggregate};
 use crate::infrastructure::huggingface_model_adapter::HuggingfaceModelAdapter;
 use crate::infrastructure::onnx_remover_adapter::OnnxRemoverAdapter;
+use crate::infrastructure::amdgpu_remover_adapter::DirectAmdgpuRemoverAdapter;
+use crate::infrastructure::ffmpeg_video_adapter::FfmpegVideoAdapter;
 use crate::capabilities::removal_usecase_executor::RemovalUseCase;
 
 /// Composition root that wires concrete adapters to the use case.
@@ -12,9 +14,16 @@ pub struct DependencyInjectionContainer {
 impl DependencyInjectionContainer {
     pub fn new() -> Self {
         let downloader = Arc::new(HuggingfaceModelAdapter::new());
-        let remover = Arc::new(OnnxRemoverAdapter::new());
+        let onnx_remover = Arc::new(OnnxRemoverAdapter::new());
+        let direct_remover = Arc::new(DirectAmdgpuRemoverAdapter::new());
+        let video_processor = Arc::new(FfmpegVideoAdapter::new());
 
-        let removal_usecase = Arc::new(RemovalUseCase::new(downloader, remover));
+        let removal_usecase = Arc::new(RemovalUseCase::new(
+            downloader,
+            onnx_remover,
+            direct_remover,
+            video_processor,
+        ));
 
         Self { removal_usecase }
     }
